@@ -16,6 +16,7 @@ whole day's episode.
 import calendar
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,15 @@ def fetch_github_releases(repo: str, cutoff_ts: float, token: str | None) -> lis
     return items
 
 
+def _title_matches_query(title: str, query: str) -> bool:
+    """True only if every word in `query` appears as an exact whole word in
+    `title` (case-insensitive). Algolia's own relevance ranking is too loose
+    for short tech-term queries to trust on its own — see the call site."""
+    words = re.findall(r"[a-z0-9]+", query.lower())
+    title_lower = title.lower()
+    return all(re.search(rf"\b{re.escape(w)}\b", title_lower) for w in words)
+
+
 def fetch_hn(query: str, cutoff_ts: float) -> list[dict]:
     items = []
     try:
@@ -113,17 +123,26 @@ def fetch_hn(query: str, cutoff_ts: float) -> list[dict]:
             timeout=20,
         )
         resp.raise_for_status()
-        for hit in resp.json().get("hits", [])[:10]:
+        for hit in resp.json().get("hits", []):
+            title = hit.get("title", "")
+            # Algolia's HN search applies typo-tolerant fuzzy matching, which for short
+            # queries produces nonsense matches (query "Java" matched "Japan", even
+            # "avalanche" — seen in testing). Require every query word to appear as an
+            # exact whole word in the title before trusting the match.
+            if not _title_matches_query(title, query):
+                continue
             items.append(
                 {
                     "source": "hackernews",
                     "source_name": "Hacker News",
-                    "title": hit.get("title", ""),
+                    "title": title,
                     "url": hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID')}",
                     "snippet": f"{hit.get('points', 0)} points, {hit.get('num_comments', 0)} comments",
                     "published_at": hit.get("created_at_i", cutoff_ts),
                 }
             )
+            if len(items) >= 10:
+                break
     except Exception as exc:  # noqa: BLE001
         log.warning("HN fetch failed for query '%s': %s", query, exc)
     return items
