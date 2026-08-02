@@ -1,5 +1,6 @@
 name: Daily Tech Briefing
 
+
 on:
   schedule:
     # 03:00 UTC = 06:00 AM AST (Saudi Arabia, UTC+3) — a 2-hour buffer before
