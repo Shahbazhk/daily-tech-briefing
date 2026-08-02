@@ -23,7 +23,7 @@ The user works across a broad backend/DevOps stack (Java, Spring Boot, Liferay, 
 
 ## 3. Objectives (V1)
 
-1. Every day, generate one audio podcast episode (~18–22 minutes) summarizing the prior 24 hours of notable activity across the tracked technologies.
+1. Every day, generate one audio podcast episode (~18–22 minutes on a typical news day) summarizing the prior 24 hours of notable activity across the tracked technologies. **Decision (2026-08-02, confirmed after live testing): episode length is allowed to vary with real news volume** — the pipeline must never pad with invented or tangential content just to hit a target runtime. A quiet day producing a 9-minute episode is correct behavior, not a bug.
 2. Episode must be ready and available in the app by 8:00 AM AST daily.
 3. Content must be in **simple, conversational English** — understandable without deep prior context, but still technically accurate.
 4. Content should highlight, where available:
@@ -92,7 +92,7 @@ Java, Spring Boot, Liferay, Hibernate, Kafka, Redis, Docker, Microservices, Kube
 | FR-3 | System shall generate a single narration script per day covering all topics with meaningful updates that day (topics with no news are skipped or briefly noted). |
 | FR-4 | Script tone shall be simple, conversational English suitable for audio consumption — no dense jargon without a quick explanation. |
 | FR-5 | Where applicable, script shall mention: what changed, example companies/projects using the tech, and any issue + how it was resolved. |
-| FR-6 | System shall convert the script into an audio file targeting 18–22 minutes runtime. |
+| FR-6 | System shall convert the script into an audio file. Runtime targets ~18–22 minutes on a typical news day but is allowed to run shorter on quiet days rather than pad with invented content (see Section 3, Objective 1). |
 | FR-7 | The daily episode (audio + transcript) shall be available to the Android app no later than 8:00 AM AST. |
 | FR-8 | Android app shall notify the user when the new episode is ready. |
 | FR-9 | Android app shall support play/pause/seek/skip-forward/skip-back and playback speed control. |
@@ -242,7 +242,8 @@ Still open:
 ## 17. Success Metrics (V1)
 
 - Episode successfully generated and available by 8:00 AM AST on ≥95% of days.
-- Episode runtime within 18–22 minutes on ≥90% of episodes.
+- Episode runtime tracks real news volume (~18–22 min on active days, shorter on quiet ones) — never padded to hit a number. See Section 3.
+- Zero fabricated facts, companies, or resolutions traced back to source items (spot-checked periodically against `topics_covered` source links in the transcript).
 - User (self-reported) finds content accurate and non-redundant across days.
 - Pipeline cost stays at $0/month.
 
