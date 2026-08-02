@@ -56,6 +56,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DATE=$(date -u +%F)
+          # Idempotent: a manual re-run on the same day (e.g. while testing) would otherwise
+          # fail with "a release with the same tag name already exists".
+          gh release delete "episode-$DATE" --yes 2>/dev/null || true
           gh release create "episode-$DATE" \
             pipeline/data/episode_*.mp3 \
             pipeline/data/transcript_*.json \
