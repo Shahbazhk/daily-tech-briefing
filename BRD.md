@@ -79,7 +79,13 @@ Pipeline (runs daily, unattended, timed to finish before 8:00 AM AST):
 
 ## 7. Content Topics (V1 tracked list)
 
-Java, Spring Boot, Liferay, Hibernate, Kafka, Redis, Docker, Microservices, Kubernetes, Jenkins, Git, Cloud (AWS/Azure/GCP general), and an extensible "etc." category for adjacent tools the user may add later (e.g., Maven, RabbitMQ, Elasticsearch, CI/CD tooling, security/CVE alerts relevant to the above).
+Java, Spring Boot, **Liferay DXP** (Digital Experience Platform — the enterprise Java portal
+framework specifically, not to be confused with anything else of a similar name), Hibernate,
+Kafka, Redis, Docker, Microservices, Kubernetes, Jenkins, Git, **Angular** (front-end framework,
+added 2026-08-02 — commonly paired with the Java/Spring Boot/Liferay DXP stack above in
+enterprise projects), Cloud (AWS/Azure/GCP general), and an extensible "etc." category for
+adjacent tools the user may add later (e.g., Maven, RabbitMQ, Elasticsearch, CI/CD tooling,
+security/CVE alerts relevant to the above).
 
 > Topic list must be config-driven (not hardcoded), so topics can be added/removed/reordered without code changes.
 
@@ -135,10 +141,23 @@ Java, Spring Boot, Liferay, Hibernate, Kafka, Redis, Docker, Microservices, Kube
    - Why it matters in plain English.
    - Who's using/affected (companies, notable projects) — when available.
    - Issue → root cause → resolution (when the story is about a bug/incident).
-3. Quick-hits round-up for minor items across other topics.
-4. Outro (recap + "that's your 20 minutes for today").
+3. **The Architect's Corner** (added 2026-08-02) — a fixed ~5-minute recurring segment,
+   independent of the topics above, aimed specifically at software-architecture/system-design
+   growth for someone doing architect-level work on enterprise projects. Format: one real
+   problem an engineering team faced → the solution they built → why it matters (trade-offs,
+   when the pattern applies elsewhere). Sourced from real engineering blogs (Netflix, Uber, AWS
+   Architecture, Martin Fowler, High Scalability, etc.) — never an invented case study. Since
+   these blogs post far less often than the daily-release topics above, this segment uses its
+   own ~7-day lookback rather than 24 hours, so there's usually real material even though the
+   segment airs daily.
+4. Outro (recap + sign-off).
 
-Target length: ~2,600–3,000 spoken words for ~20 minutes at natural narration pace.
+Target length: ~2,600–3,000 spoken words for ~18–22 minutes at natural narration pace on a
+typical news day (Architect's Corner accounts for ~720 words / ~5 min of that). Per the
+2026-08-02 decision in Section 3, this varies honestly with real news/case-study volume rather
+than being padded to a fixed number — including the Architect's Corner itself: if nothing
+substantive turns up even in its wider lookback window, it's skipped that day rather than
+inventing a case study.
 
 ## 12. Android App — Screens (V1)
 

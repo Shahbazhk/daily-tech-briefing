@@ -2,6 +2,11 @@
 # rss/github_repos/reddit_subs are best-effort defaults — verify/adjust URLs periodically,
 # since official feed locations change. The collector skips a feed silently (with a log line)
 # rather than failing the whole run if one URL breaks.
+#
+# `description` is optional free-text background the script writer includes as context when
+# writing that topic's segment — mainly there to disambiguate topics an LLM could otherwise
+# misread (e.g. "Liferay" alone is unambiguous, but naming it precisely as the DXP product
+# keeps the segment framed correctly for an enterprise-portal audience rather than generic).
 
 topics:
   java:
@@ -22,7 +27,11 @@ topics:
     hn_query: "Spring Boot"
 
   liferay:
-    label: "Liferay"
+    label: "Liferay DXP"
+    description: >
+      Liferay DXP (Digital Experience Platform) - an enterprise Java-based portal framework
+      used to build intranets, customer/partner portals, and content-managed enterprise
+      websites. Not to be confused with any unrelated product of a similar name.
     rss: []
     github_repos: ["liferay/liferay-portal"]
     reddit_subs: []
@@ -91,6 +100,18 @@ topics:
     reddit_subs: ["git"]
     hn_query: "Git"
 
+  angular:
+    label: "Angular"
+    description: >
+      Angular - the TypeScript-based front-end framework maintained by Google, commonly
+      paired with Java/Spring Boot backends (and with Liferay DXP front-ends) in enterprise
+      applications.
+    rss:
+      - https://blog.angular.dev/feed
+    github_repos: ["angular/angular"]
+    reddit_subs: ["Angular2"]
+    hn_query: "Angular"
+
   cloud:
     label: "Cloud (AWS / Azure / GCP)"
     rss:
@@ -107,3 +128,27 @@ lookback_hours: 24
 # Cap on raw items collected per topic before ranking/summarization, to keep the
 # LLM prompt (and the resulting ~20 min episode) bounded even on very active days.
 max_items_per_topic: 8
+
+# The Architect's Corner: a dedicated ~5-minute recurring segment on enterprise software
+# architecture / system design - a real problem an engineering team hit, the solution they
+# built, and why it matters. Sourced from real engineering blogs (never invented case studies),
+# which is why this uses its own much wider lookback: unlike the daily-release topics above,
+# these blogs might post once every week or two, not daily.
+architecture_corner:
+  label: "The Architect's Corner"
+  description: >
+    A ~5-minute segment on enterprise software architecture and system design: one real
+    problem an engineering team faced, the solution they built, and why it matters - told
+    in a system-design/case-study style for a working software architect.
+  lookback_hours: 168 # 7 days
+  max_items: 2
+  target_words: 720 # ~5 min at ~145 wpm
+  rss:
+    - https://netflixtechblog.com/feed
+    - https://www.uber.com/blog/engineering/rss/
+    - https://aws.amazon.com/blogs/architecture/feed/
+    - https://martinfowler.com/feed.atom
+    - https://highscalability.com/feed/
+  github_repos: []
+  reddit_subs: ["softwarearchitecture"]
+  hn_query: "system design"

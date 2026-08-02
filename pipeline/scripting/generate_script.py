@@ -1,25 +1,29 @@
 """
-Turns pipeline/data/collected_<date>.json into a single narrated podcast
-script (~2,600-3,000 words / ~18-22 min spoken) using an open-weight model
-served free by Groq Cloud (https://console.groq.com).
+Turns pipeline/data/collected_<date>.json into a single narrated podcast script (~2,800
+words / ~18-22 min spoken on a normal news day) using an open-weight model served free by
+Groq Cloud (https://console.groq.com).
 
 Model IDs on Groq's free tier change over time as they add/retire models —
 if GROQ_MODEL 404s, check https://console.groq.com/docs/models and update
 the default below or set GROQ_MODEL in the environment.
 
-Design note: we generate ONE topic segment per Groq call, each with its own
-explicit word-count budget, rather than asking for the whole ~2800-word
-episode in a single prompt. First-round testing showed the single-big-prompt
-approach badly undershoots (the model returned ~550, then plateaued around
-~1500 words even after being told to expand) — a model asked to hit a small,
-concrete per-segment target follows it far more reliably than one asked to
-self-pace a long global target. Intro/outro are templated directly (no LLM
-call needed — there's nothing creative there, just structure).
+Structure: intro -> one segment per tracked topic (Java, Spring Boot, Liferay DXP, ...,
+Angular, Cloud) -> a transition -> "The Architect's Corner" (a fixed ~5-minute segment on a
+real enterprise system-design/architecture case study, sourced from real engineering blogs
+with its own wider lookback since those post far less often than daily — see
+architecture_corner in sources.yaml) -> outro.
 
-On a genuinely thin news day (few topics, few items), the resulting episode
-will legitimately run shorter than 18-22 minutes — see the module-level note
-above generate_topic_segment(). That's intentional: BRD Section 11 and the
-system prompt both say not to pad with invented content just to hit a length.
+Design note: we generate ONE segment per Groq call, each with its own explicit word-count
+budget, rather than asking for the whole episode in a single prompt. First-round testing
+showed the single-big-prompt approach badly undershoots (the model returned ~550, then
+plateaued around ~1500 words even after being told to expand) — a model asked to hit a
+small, concrete per-segment target follows it far more reliably than one asked to self-pace
+a long global target. Intro/outro/transition are templated directly (no LLM call needed —
+there's nothing creative there, just structure).
+
+On a genuinely thin news day (few topics, few items), the resulting episode will
+legitimately run shorter than 18-22 minutes. That's intentional: BRD Section 11 and the
+system prompts both say not to pad with invented content just to hit a length.
 
 Output:
   pipeline/data/script_<date>.md        - the narration script (fed to TTS)
@@ -38,7 +42,10 @@ log = get_logger("scripting")
 
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
-TOTAL_TARGET_WORDS = 2800
+# Main tracked-topic pool. The Architect's Corner (see below) has its own separate ~720-word
+# budget on top of this, so the two together still land near the ~2800-word / ~20 min episode
+# target on a normal day — see BRD Section 11.
+TOPIC_TARGET_WORDS = 2000
 MIN_SEGMENT_WORDS = 300
 MAX_SEGMENT_WORDS = 600
 # If a segment comes back under half its budget, we retry it once with a firmer ask.
@@ -64,20 +71,60 @@ Rules:
   (the topic name will be introduced separately). This text is read aloud by a TTS engine.
 """
 
+ARCHITECTURE_SYSTEM_PROMPT = """You are the writer for "The Architect's Corner" — a ~5-minute
+recurring segment on a daily technology podcast, aimed at a working software architect on
+enterprise projects. You write ONLY this segment, not the whole episode — another process
+stitches it in, so do NOT write "welcome" or "goodbye" framing, just dive in.
+
+This segment covers ONE real problem an engineering team faced and the solution they built,
+told the way a system-design case study or architecture deep-dive is told:
+1. The problem: what situation/constraint/scale challenge the team was facing, in concrete terms.
+2. The solution: what they actually built or changed — the architecture/design decisions involved.
+3. Why it matters: what a listener working on enterprise systems should take away from it —
+   trade-offs, when this pattern applies elsewhere, what could go wrong if misapplied.
+
+Rules:
+- Plain, conversational, simple English, but keep the technical substance real — this is for an
+  experienced audience, so don't over-simplify the architecture itself, just the delivery.
+- Do not invent facts, numbers, or outcomes not supported by the provided source material. If the
+  source is thin on a detail (e.g. exact scale numbers), speak in the general terms the source
+  actually supports rather than inventing specifics.
+- If two items are provided, pick the single most substantial one and go deep on it rather than
+  splitting shallowly across both — depth over coverage for this segment specifically.
+- Continuous spoken narration only — no markdown headers, no bullet points, no title (the segment
+  is introduced separately). This text is read aloud by a TTS engine.
+"""
+
 INTRO_TEMPLATE = (
     "Good morning. Here's your daily tech briefing for {date}. "
     "Today we're covering {topics}. Let's get into it."
 )
+ARCHITECTURE_TRANSITION = (
+    "Now, let's shift gears for the Architect's Corner — five minutes on real enterprise "
+    "software architecture and system design."
+)
 OUTRO_TEXT = "And that's your briefing for today. See you tomorrow morning."
 
 
-def build_segment_prompt(topic_label: str, items: list[dict], target_words: int) -> str:
-    lines = [
-        f"Topic for this segment: {topic_label}",
-        f"Target length for this segment: about {target_words} words.",
-        "",
-        "Items collected in the last 24 hours for this topic:",
-    ]
+def build_segment_prompt(topic_label: str, items: list[dict], target_words: int, description: str = "") -> str:
+    lines = [f"Topic for this segment: {topic_label}"]
+    if description:
+        lines.append(f"Context on this topic: {description.strip()}")
+    lines.append(f"Target length for this segment: about {target_words} words.")
+    lines.append("")
+    lines.append("Items collected in the last 24 hours for this topic:")
+    for item in items:
+        lines.append(f"- [{item['source']}] {item['title']} — {item['snippet']} (source: {item['url']})")
+    return "\n".join(lines)
+
+
+def build_architecture_prompt(items: list[dict], target_words: int, description: str = "") -> str:
+    lines = []
+    if description:
+        lines.append(f"Segment context: {description.strip()}")
+    lines.append(f"Target length: about {target_words} words.")
+    lines.append("")
+    lines.append("Candidate source article(s) from real engineering blogs (pick the best one):")
     for item in items:
         lines.append(f"- [{item['source']}] {item['title']} — {item['snippet']} (source: {item['url']})")
     return "\n".join(lines)
@@ -99,10 +146,10 @@ def call_groq(messages: list[dict], max_tokens: int = 1200) -> str:
     return response.choices[0].message.content.strip()
 
 
-def generate_topic_segment(topic_label: str, items: list[dict], target_words: int) -> str:
+def generate_topic_segment(topic_label: str, items: list[dict], target_words: int, description: str = "") -> str:
     messages = [
         {"role": "system", "content": SEGMENT_SYSTEM_PROMPT},
-        {"role": "user", "content": build_segment_prompt(topic_label, items, target_words)},
+        {"role": "user", "content": build_segment_prompt(topic_label, items, target_words, description)},
     ]
     segment = call_groq(messages, max_tokens=min(1600, target_words * 3))
 
@@ -129,15 +176,45 @@ def generate_topic_segment(topic_label: str, items: list[dict], target_words: in
     return segment
 
 
+def generate_architecture_segment(items: list[dict], target_words: int, description: str = "") -> str:
+    messages = [
+        {"role": "system", "content": ARCHITECTURE_SYSTEM_PROMPT},
+        {"role": "user", "content": build_architecture_prompt(items, target_words, description)},
+    ]
+    segment = call_groq(messages, max_tokens=min(1800, target_words * 3))
+
+    word_count = len(segment.split())
+    if word_count < target_words * SEGMENT_RETRY_THRESHOLD:
+        log.warning(
+            "Architect's Corner came back at %d words (target ~%d) - retrying once with a firmer ask...",
+            word_count, target_words,
+        )
+        messages.append({"role": "assistant", "content": segment})
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    f"That was only about {word_count} words. Go deeper on the problem, the solution's "
+                    f"design details, and the trade-offs/takeaways, aiming for closer to {target_words} "
+                    f"words. If the source material is genuinely thin, get as close as you honestly can "
+                    f"without inventing details."
+                ),
+            }
+        )
+        segment = call_groq(messages, max_tokens=min(1800, target_words * 3))
+
+    return segment
+
+
 def allocate_word_budgets(topics_with_items: list[tuple[str, list[dict]]]) -> dict[str, int]:
-    """Splits TOTAL_TARGET_WORDS across topics proportionally to how many items
+    """Splits TOPIC_TARGET_WORDS across topics proportionally to how many items
     each one has, so a topic with more news gets more airtime, within a
     [MIN_SEGMENT_WORDS, MAX_SEGMENT_WORDS] band per topic."""
     total_items = sum(len(items) for _, items in topics_with_items) or 1
     budgets = {}
     for label, items in topics_with_items:
         share = len(items) / total_items
-        budget = round(TOTAL_TARGET_WORDS * share)
+        budget = round(TOPIC_TARGET_WORDS * share)
         budgets[label] = max(MIN_SEGMENT_WORDS, min(MAX_SEGMENT_WORDS, budget))
     return budgets
 
@@ -153,29 +230,57 @@ def main() -> None:
         collected = json.load(f)
 
     topics_with_items = [
-        (t["label"], t["items"]) for t in collected["topics"].values() if t["items"]
+        (t["label"], t["items"], t.get("description", ""))
+        for t in collected["topics"].values()
+        if t["items"]
     ]
+    arch = collected.get("architecture_corner")
+    arch_has_items = bool(arch and arch["items"])
 
-    if not topics_with_items:
+    if not topics_with_items and not arch_has_items:
         script_text = (
             f"Good morning. This is your daily tech briefing for {date}. "
             "Quiet day — nothing notable came up across the tracked topics in the last "
             "24 hours. We'll be back with more tomorrow."
         )
     else:
-        budgets = allocate_word_budgets(topics_with_items)
-        topic_names = [label for label, _ in topics_with_items]
-        intro = INTRO_TEMPLATE.format(
-            date=date,
-            topics=", ".join(topic_names[:-1]) + (f", and {topic_names[-1]}" if len(topic_names) > 1 else topic_names[0]),
-        )
+        parts: list[str] = []
 
-        segments = []
-        for label, items in topics_with_items:
-            log.info("Generating segment: %s (target ~%d words, %d items)", label, budgets[label], len(items))
-            segments.append(generate_topic_segment(label, items, budgets[label]))
+        if topics_with_items:
+            budgets = allocate_word_budgets([(label, items) for label, items, _ in topics_with_items])
+            topic_names = [label for label, _, _ in topics_with_items]
+            topics_phrase = ", ".join(topic_names[:-1]) + (
+                f", and {topic_names[-1]}" if len(topic_names) > 1 else topic_names[0]
+            )
+            if arch_has_items:
+                topics_phrase += ", plus the Architect's Corner"
+            parts.append(INTRO_TEMPLATE.format(date=date, topics=topics_phrase))
 
-        script_text = "\n\n".join([intro, *segments, OUTRO_TEXT])
+            for label, items, description in topics_with_items:
+                log.info(
+                    "Generating segment: %s (target ~%d words, %d items)", label, budgets[label], len(items)
+                )
+                parts.append(generate_topic_segment(label, items, budgets[label], description))
+        else:
+            # Tracked topics were quiet, but the Architect's Corner has something — still
+            # worth an episode rather than skipping the day entirely.
+            parts.append(
+                f"Good morning. Here's your daily tech briefing for {date}. "
+                "The tracked topics were quiet today, but we've got a good one for the "
+                "Architect's Corner. Let's get into it."
+            )
+
+        if arch_has_items:
+            arch_target = arch.get("target_words", 720)
+            log.info(
+                "Generating Architect's Corner (target ~%d words, %d items)", arch_target, len(arch["items"])
+            )
+            if topics_with_items:
+                parts.append(ARCHITECTURE_TRANSITION)
+            parts.append(generate_architecture_segment(arch["items"], arch_target, arch.get("description", "")))
+
+        parts.append(OUTRO_TEXT)
+        script_text = "\n\n".join(parts)
 
     script_path = data_dir / f"script_{date}.md"
     with open(script_path, "w", encoding="utf-8") as f:
@@ -188,6 +293,10 @@ def main() -> None:
         for t in collected["topics"].values()
         if t["items"]
     ]
+    if arch_has_items:
+        topics_covered.append(
+            {"topic": arch["label"], "sources": [{"title": i["title"], "url": i["url"]} for i in arch["items"]]}
+        )
     transcript = {
         "date": date,
         "script": script_text,

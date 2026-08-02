@@ -215,8 +215,30 @@ def main() -> None:
     for topic_key, topic_cfg in config["topics"].items():
         log.info("Collecting topic: %s", topic_key)
         items = collect_topic(topic_key, topic_cfg, cutoff_ts, gh_token)[:max_items]
-        result["topics"][topic_key] = {"label": topic_cfg.get("label", topic_key), "items": items}
+        result["topics"][topic_key] = {
+            "label": topic_cfg.get("label", topic_key),
+            "description": topic_cfg.get("description", ""),
+            "items": items,
+        }
         log.info("  -> %d items", len(items))
+
+    # The Architect's Corner uses its own (much wider) lookback and item cap, since real
+    # engineering-blog architecture write-ups appear far less often than daily releases —
+    # see the comment on this block in sources.yaml.
+    arch_cfg = config.get("architecture_corner")
+    if arch_cfg:
+        arch_lookback = arch_cfg.get("lookback_hours", 168)
+        arch_cutoff = time.time() - arch_lookback * 3600
+        arch_max = arch_cfg.get("max_items", 2)
+        log.info("Collecting Architect's Corner (lookback %dh)", arch_lookback)
+        arch_items = collect_topic("architecture_corner", arch_cfg, arch_cutoff, gh_token)[:arch_max]
+        result["architecture_corner"] = {
+            "label": arch_cfg.get("label", "The Architect's Corner"),
+            "description": arch_cfg.get("description", ""),
+            "target_words": arch_cfg.get("target_words", 720),
+            "items": arch_items,
+        }
+        log.info("  -> %d items", len(arch_items))
 
     out_dir = ensure_data_dir()
     out_path = out_dir / f"collected_{result['date']}.json"
