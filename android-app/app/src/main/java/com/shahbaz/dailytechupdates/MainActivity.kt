@@ -5,7 +5,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
-import com.google.firebase.messaging.FirebaseMessaging
 import com.shahbaz.dailytechupdates.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 
@@ -23,10 +22,6 @@ class MainActivity : AppCompatActivity() {
 
         player = ExoPlayer.Builder(this).build()
 
-        // Every install subscribes here; publish/publish.py pushes to this topic once
-        // the episode is ready (see FcmService).
-        FirebaseMessaging.getInstance().subscribeToTopic("daily_episode")
-
         binding.playPauseButton.setOnClickListener { togglePlayback() }
 
         loadTodayEpisode()
@@ -35,7 +30,11 @@ class MainActivity : AppCompatActivity() {
     private fun loadTodayEpisode() {
         binding.statusText.text = getString(R.string.loading_episode)
         lifecycleScope.launch {
-            val episode = repository.getLatestEpisode()
+            val episode = try {
+                repository.getLatestEpisode()
+            } catch (e: Exception) {
+                null
+            }
             if (episode == null || episode.audioUrl.isEmpty()) {
                 binding.statusText.text = getString(R.string.no_episode_yet)
                 return@launch

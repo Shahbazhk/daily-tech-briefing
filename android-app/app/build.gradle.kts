@@ -1,7 +1,10 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("com.google.gms.google-services")
+    // Re-add "com.google.gms.google-services" here (and its classpath in the root
+    // build.gradle.kts) once Firebase is set up and app/google-services.json exists —
+    // see EpisodeRepository's TODO. Left out for now so the app builds and installs
+    // without needing a Firebase project first (BRD Section 14.5 fallback path).
 }
 
 android {
@@ -48,11 +51,5 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
 
-    // Firebase (free Spark plan) - episode metadata + audio URL + push notifications.
-    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
-    implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-messaging-ktx")
-
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 }

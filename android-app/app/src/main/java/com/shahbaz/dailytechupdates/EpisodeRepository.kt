@@ -1,33 +1,67 @@
 package com.shahbaz.dailytechupdates
 
-import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
-import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
-/** Reads episode metadata written by pipeline/publish/publish.py into the "episodes" Firestore collection. */
+/**
+ * Reads the latest episode straight from GitHub Releases published by
+ * pipeline/publish/publish.py's fallback path (used whenever FIREBASE_SERVICE_ACCOUNT
+ * isn't configured - see BRD Section 14.5). No auth needed: the repo is public and this
+ * is well under GitHub's unauthenticated rate limit for a single-user app checking once
+ * in a while.
+ *
+ * TODO: once Firebase is set up (BRD open item), swap this for a Firestore-backed
+ * implementation with real push notifications instead of check-on-open polling.
+ */
 class EpisodeRepository {
-    private val db = Firebase.firestore
 
-    suspend fun getLatestEpisode(): Episode? {
-        val snapshot = db.collection("episodes")
-            .orderBy("date", Query.Direction.DESCENDING)
-            .limit(1)
-            .get()
-            .await()
-        return snapshot.documents.firstOrNull()?.toEpisode()
+    private val latestReleaseUrl =
+        "https://api.github.com/repos/Shahbazhk/daily-tech-briefing/releases/latest"
+
+    suspend fun getLatestEpisode(): Episode? = withContext(Dispatchers.IO) {
+        val release = JSONObject(httpGet(latestReleaseUrl))
+        val assets = release.getJSONArray("assets")
+
+        var audioUrl = ""
+        var transcriptUrl = ""
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            val name = asset.getString("name")
+            val url = asset.getString("browser_download_url")
+            if (name.endsWith(".mp3")) audioUrl = url
+            if (name.startsWith("transcript_") && name.endsWith(".json")) transcriptUrl = url
+        }
+        if (audioUrl.isEmpty()) return@withContext null
+
+        var date = release.optString("tag_name", "").removePrefix("episode-")
+        var script = ""
+        var topics = emptyList<String>()
+        if (transcriptUrl.isNotEmpty()) {
+            val transcript = JSONObject(httpGet(transcriptUrl))
+            date = transcript.optString("date", date)
+            script = transcript.optString("script", "")
+            transcript.optJSONArray("topics_covered")?.let { topicsArray ->
+                topics = (0 until topicsArray.length()).map {
+                    topicsArray.getJSONObject(it).optString("topic")
+                }
+            }
+        }
+
+        Episode(date = date, audioUrl = audioUrl, topicsCovered = topics, script = script)
     }
 
-    suspend fun getEpisode(date: String): Episode? {
-        val doc = db.collection("episodes").document(date).get().await()
-        if (!doc.exists()) return null
-        return doc.toEpisode()
+    private fun httpGet(urlString: String): String {
+        val connection = URL(urlString).openConnection() as HttpURLConnection
+        connection.setRequestProperty("Accept", "application/vnd.github+json")
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 15_000
+        return try {
+            connection.inputStream.bufferedReader().use { it.readText() }
+        } finally {
+            connection.disconnect()
+        }
     }
-
-    private fun com.google.firebase.firestore.DocumentSnapshot.toEpisode() = Episode(
-        date = getString("date") ?: "",
-        audioUrl = getString("audio_url") ?: "",
-        topicsCovered = (get("topics_covered") as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
-        script = getString("script") ?: ""
-    )
 }
