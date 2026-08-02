@@ -1,0 +1,15 @@
+{
+  "_comment": "This is a REFERENCE ONLY, not a working file. After creating a free Firebase project (console.firebase.google.com) and registering this app with applicationId com.shahbaz.dailytechupdates, download the real google-services.json from Project Settings and place it at android-app/app/google-services.json (that exact path/name is gitignored so your project keys never get committed).",
+  "project_info": {
+    "project_id": "your-project-id"
+  },
+  "client": [
+    {
+      "client_info": {
+        "android_client_info": {
+          "package_name": "com.shahbaz.dailytechupdates"
+        }
+      }
+    }
+  ]
+}

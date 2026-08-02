@@ -1,0 +1,109 @@
+# Topic -> source config. Config-driven per BRD FR (topics must not be hardcoded).
+# rss/github_repos/reddit_subs are best-effort defaults — verify/adjust URLs periodically,
+# since official feed locations change. The collector skips a feed silently (with a log line)
+# rather than failing the whole run if one URL breaks.
+
+topics:
+  java:
+    label: "Java"
+    rss:
+      - https://inside.java/feed.xml
+      - https://openjdk.org/jeps/rss.xml
+    github_repos: []
+    reddit_subs: ["java"]
+    hn_query: "Java"
+
+  spring_boot:
+    label: "Spring Boot"
+    rss:
+      - https://spring.io/blog.atom
+    github_repos: ["spring-projects/spring-boot"]
+    reddit_subs: ["java", "springboot"]
+    hn_query: "Spring Boot"
+
+  liferay:
+    label: "Liferay"
+    rss: []
+    github_repos: ["liferay/liferay-portal"]
+    reddit_subs: []
+    hn_query: "Liferay"
+
+  hibernate:
+    label: "Hibernate"
+    rss:
+      - https://in.relation.to/feed.xml
+    github_repos: ["hibernate/hibernate-orm"]
+    reddit_subs: ["java"]
+    hn_query: "Hibernate ORM"
+
+  kafka:
+    label: "Apache Kafka"
+    rss:
+      - https://blogs.apache.org/kafka/feed/entries/atom
+    github_repos: ["apache/kafka"]
+    reddit_subs: ["apachekafka"]
+    hn_query: "Kafka"
+
+  redis:
+    label: "Redis"
+    rss:
+      - https://redis.io/blog/feed/
+    github_repos: ["redis/redis"]
+    reddit_subs: ["redis"]
+    hn_query: "Redis"
+
+  docker:
+    label: "Docker"
+    rss:
+      - https://www.docker.com/blog/feed/
+    github_repos: ["moby/moby"]
+    reddit_subs: ["docker"]
+    hn_query: "Docker"
+
+  microservices:
+    label: "Microservices"
+    rss: []
+    github_repos: []
+    reddit_subs: ["microservices", "devops"]
+    hn_query: "microservices"
+
+  kubernetes:
+    label: "Kubernetes"
+    rss:
+      - https://kubernetes.io/feed.xml
+    github_repos: ["kubernetes/kubernetes"]
+    reddit_subs: ["kubernetes"]
+    hn_query: "Kubernetes"
+
+  jenkins:
+    label: "Jenkins"
+    rss:
+      - https://www.jenkins.io/node/feed.xml
+    github_repos: ["jenkinsci/jenkins"]
+    reddit_subs: ["jenkinsci"]
+    hn_query: "Jenkins CI"
+
+  git:
+    label: "Git"
+    rss:
+      - https://github.blog/feed/
+    github_repos: ["git/git"]
+    reddit_subs: ["git"]
+    hn_query: "Git"
+
+  cloud:
+    label: "Cloud (AWS / Azure / GCP)"
+    rss:
+      - https://aws.amazon.com/blogs/aws/feed/
+      - https://azure.microsoft.com/en-us/blog/feed/
+      - https://cloud.google.com/feeds/gcp-release-notes.xml
+    github_repos: []
+    reddit_subs: ["aws", "azure", "googlecloud"]
+    hn_query: "cloud outage"
+
+# Collection window, in hours, applied uniformly to all sources above.
+lookback_hours: 24
+
+# Cap on raw items collected per topic before ranking/summarization, to keep the
+# LLM prompt (and the resulting ~20 min episode) bounded even on very active days.
+max_items_per_topic: 8

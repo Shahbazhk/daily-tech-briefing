@@ -1,0 +1,30 @@
+# Secrets / local env
+.env
+*.env
+firebase-service-account.json
+google-services.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+pipeline/data/
+
+# Piper voice models / binaries (downloaded by CI, not committed)
+pipeline/tts/piper/
+*.onnx
+*.onnx.json
+
+# Android / Gradle
+android-app/.gradle/
+android-app/.idea/
+android-app/local.properties
+android-app/*/build/
+android-app/build/
+android-app/.cxx/
+*.iml
+.DS_Store
+
+# Editors
+.vscode/

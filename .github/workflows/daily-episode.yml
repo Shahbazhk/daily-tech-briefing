@@ -1,0 +1,62 @@
+name: Daily Tech Briefing
+
+on:
+  schedule:
+    # 03:00 UTC = 06:00 AM AST (Saudi Arabia, UTC+3) — a 2-hour buffer before
+    # the 08:00 AM AST delivery target, to absorb slow LLM/TTS runs or retries.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {} # allows manual "Run workflow" for testing
+
+permissions:
+  contents: write # needed only for the GitHub Release fallback step
+
+jobs:
+  build-episode:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+      REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (ffmpeg for WAV -> MP3)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python deps
+        run: |
+          pip install -r pipeline/requirements.txt
+          pip install piper-tts
+
+      - name: Download Piper voice model (open-source, one-time per run)
+        run: |
+          mkdir -p pipeline/tts/piper
+          # en_US-lessac-medium is a good default natural-sounding voice.
+          # If this voice name ever becomes unavailable, see the current list at
+          # https://github.com/rhasspy/piper (VOICES.md) and update here.
+          python -m piper.download_voices en_US-lessac-medium --data-dir pipeline/tts/piper
+          MODEL_PATH=$(find pipeline/tts/piper -name '*.onnx' | head -n 1)
+          echo "PIPER_VOICE_MODEL=$MODEL_PATH" >> "$GITHUB_ENV"
+
+      - name: Run pipeline (collect -> script -> TTS -> publish)
+        run: python pipeline/run_pipeline.py
+
+      - name: Fallback - attach episode to a GitHub Release (only if Firebase isn't configured)
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date -u +%F)
+          gh release create "episode-$DATE" \
+            pipeline/data/episode_*.mp3 \
+            pipeline/data/transcript_*.json \
+            --title "Daily Tech Briefing - $DATE" \
+            --notes "Automated daily episode. Firebase publish was not configured, so the app should poll this release."
