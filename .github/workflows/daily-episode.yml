@@ -3,9 +3,12 @@ name: Daily Tech Briefing
 
 on:
   schedule:
-    # 03:00 UTC = 06:00 AM AST (Saudi Arabia, UTC+3) — a 2-hour buffer before
-    # the 08:00 AM AST delivery target, to absorb slow LLM/TTS runs or retries.
-    - cron: "0 3 * * *"
+    # 00:00 UTC = 03:00 AM AST (Saudi Arabia, UTC+3) — a 5-hour buffer before
+    # the 08:00 AM AST delivery target. GitHub's `schedule` trigger is best-effort
+    # and can be delayed by hours under load (seen: 3h27m delay on 2026-08-03,
+    # which blew through the previous 2-hour buffer) — this buffer is sized to
+    # absorb that plus slow LLM/TTS runs or retries.
+    - cron: "0 0 * * *"
   workflow_dispatch: {} # allows manual "Run workflow" for testing
 
 permissions:

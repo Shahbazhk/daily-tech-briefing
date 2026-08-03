@@ -23,6 +23,7 @@ class MainActivity : AppCompatActivity() {
         player = ExoPlayer.Builder(this).build()
 
         binding.playPauseButton.setOnClickListener { togglePlayback() }
+        binding.statusText.setOnClickListener { loadTodayEpisode() }
 
         loadTodayEpisode()
     }

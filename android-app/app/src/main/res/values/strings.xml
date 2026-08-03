@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Daily Tech Updates</string>
     <string name="loading_episode">Loading today\'s briefing…</string>
-    <string name="no_episode_yet">No episode yet — check back at 8 AM.</string>
+    <string name="no_episode_yet">No episode yet — check back at 8 AM. (tap to retry)</string>
     <string name="ready_to_play">Ready to play</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>

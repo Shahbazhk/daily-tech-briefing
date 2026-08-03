@@ -2,6 +2,7 @@ package com.shahbaz.dailytechupdates
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -13,17 +14,36 @@ import java.net.URL
  * is well under GitHub's unauthenticated rate limit for a single-user app checking once
  * in a while.
  *
+ * Deliberately does NOT use GET /releases/latest: this repo also publishes an "app-latest"
+ * release for APK builds (build-apk.yml) into the same release list, and GitHub's "latest"
+ * is whichever release was published most recently repo-wide - not the most recent episode.
+ * An APK rebuild after an episode publish would silently make /releases/latest point at the
+ * APK release (no audio asset) until the next episode overtakes it. Instead, list all
+ * releases and pick the newest one tagged "episode-YYYY-MM-DD" ourselves.
+ *
  * TODO: once Firebase is set up (BRD open item), swap this for a Firestore-backed
  * implementation with real push notifications instead of check-on-open polling.
  */
 class EpisodeRepository {
 
-    private val latestReleaseUrl =
-        "https://api.github.com/repos/Shahbazhk/daily-tech-briefing/releases/latest"
+    private val releasesUrl =
+        "https://api.github.com/repos/Shahbazhk/daily-tech-briefing/releases"
 
     suspend fun getLatestEpisode(): Episode? = withContext(Dispatchers.IO) {
-        val release = JSONObject(httpGet(latestReleaseUrl))
-        val assets = release.getJSONArray("assets")
+        val releases = JSONArray(httpGet(releasesUrl))
+        var release: JSONObject? = null
+        for (i in 0 until releases.length()) {
+            val candidate = releases.getJSONObject(i)
+            if (candidate.optString("tag_name").startsWith("episode-")) {
+                if (release == null ||
+                    candidate.getString("tag_name") > release!!.getString("tag_name")
+                ) {
+                    release = candidate
+                }
+            }
+        }
+        val chosen = release ?: return@withContext null
+        val assets = chosen.getJSONArray("assets")
 
         var audioUrl = ""
         var transcriptUrl = ""
@@ -36,7 +56,7 @@ class EpisodeRepository {
         }
         if (audioUrl.isEmpty()) return@withContext null
 
-        var date = release.optString("tag_name", "").removePrefix("episode-")
+        var date = chosen.optString("tag_name", "").removePrefix("episode-")
         var script = ""
         var topics = emptyList<String>()
         if (transcriptUrl.isNotEmpty()) {
