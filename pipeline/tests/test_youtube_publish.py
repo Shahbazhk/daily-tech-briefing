@@ -39,3 +39,18 @@ def test_video_already_uploaded_false_when_no_match():
         "items": [{"snippet": {"title": "Daily Tech Briefing - 2026-08-02"}}]
     }
     assert youtube_publish.video_already_uploaded(fake_youtube, "PL123", "2026-08-03") is False
+
+
+def test_video_already_uploaded_pages_through_playlist_until_match_found():
+    fake_youtube = MagicMock()
+    fake_youtube.playlistItems.return_value.list.return_value.execute.side_effect = [
+        {
+            "items": [{"snippet": {"title": "Daily Tech Briefing - 2026-08-01"}}],
+            "nextPageToken": "abc",
+        },
+        {
+            "items": [{"snippet": {"title": "Daily Tech Briefing - 2026-08-03"}}],
+        },
+    ]
+    assert youtube_publish.video_already_uploaded(fake_youtube, "PL123", "2026-08-03") is True
+    assert fake_youtube.playlistItems.return_value.list.return_value.execute.call_count == 2

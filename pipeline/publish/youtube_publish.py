@@ -63,8 +63,16 @@ def build_youtube_client():
 
 
 def video_already_uploaded(youtube, playlist_id: str, date: str) -> bool:
-    response = youtube.playlistItems().list(part="snippet", playlistId=playlist_id, maxResults=50).execute()
-    return any(date in item["snippet"]["title"] for item in response.get("items", []))
+    page_token = None
+    while True:
+        response = youtube.playlistItems().list(
+            part="snippet", playlistId=playlist_id, maxResults=50, pageToken=page_token
+        ).execute()
+        if any(date in item["snippet"]["title"] for item in response.get("items", [])):
+            return True
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            return False
 
 
 def upload_video(youtube, video_path: Path, metadata: dict) -> str:
