@@ -27,3 +27,6 @@ android-app/.cxx/
 
 # Editors
 .vscode/
+
+# Brainstorming companion scratch files
+.superpowers/
