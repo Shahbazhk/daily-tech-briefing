@@ -7,7 +7,25 @@ PIPELINE_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PIPELINE_ROOT / "data"
 CONFIG_PATH = PIPELINE_ROOT / "config" / "sources.yaml"
 
+DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+
 _LOGGING_CONFIGURED = False
+
+
+def call_groq(messages: list[dict], max_tokens: int = 1200) -> str:
+    from groq import Groq
+
+    api_key = os.environ["GROQ_API_KEY"]
+    model = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+    client = Groq(api_key=api_key)
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.5,
+        max_tokens=max_tokens,
+    )
+    return response.choices[0].message.content.strip()
 
 
 def get_logger(name: str) -> logging.Logger:

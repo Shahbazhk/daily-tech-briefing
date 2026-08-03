@@ -5,7 +5,7 @@ Groq Cloud (https://console.groq.com).
 
 Model IDs on Groq's free tier change over time as they add/retire models —
 if GROQ_MODEL 404s, check https://console.groq.com/docs/models and update
-the default below or set GROQ_MODEL in the environment.
+`DEFAULT_GROQ_MODEL` in `common.py`, or set `GROQ_MODEL` in the environment.
 
 Structure: intro -> one segment per tracked topic (Java, Spring Boot, Liferay DXP, ...,
 Angular, Cloud) -> a transition -> "The Architect's Corner" (a fixed ~5-minute segment on a
@@ -36,11 +36,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import call_groq, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("scripting")
-
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
 # Main tracked-topic pool. The Architect's Corner (see below) has its own separate ~720-word
 # budget on top of this, so the two together still land near the ~2800-word / ~20 min episode
@@ -69,6 +67,11 @@ Rules:
   genuine substance before hitting the word target, stop rather than pad with filler/repetition.
 - Continuous spoken narration only — no markdown headers, no bullet points, no segment title
   (the topic name will be introduced separately). This text is read aloud by a TTS engine.
+- Never include vulgarity, profanity, or sexual content. Never present an unethical use-case,
+  project, or example (e.g. building surveillance tools to spy on people without consent,
+  exploit/attack tooling meant to cause harm, discriminatory or privacy-violating systems) as
+  something to emulate or admire — if a source item is fundamentally about such a use-case, skip
+  it rather than covering it.
 """
 
 ARCHITECTURE_SYSTEM_PROMPT = """You are the writer for "The Architect's Corner" — a ~5-minute
@@ -93,7 +96,57 @@ Rules:
   splitting shallowly across both — depth over coverage for this segment specifically.
 - Continuous spoken narration only — no markdown headers, no bullet points, no title (the segment
   is introduced separately). This text is read aloud by a TTS engine.
+- Never include vulgarity, profanity, or sexual content. Never present an unethical use-case,
+  project, or example (e.g. building surveillance tools to spy on people without consent,
+  exploit/attack tooling meant to cause harm, discriminatory or privacy-violating systems) as
+  something to emulate or admire — if a source item is fundamentally about such a use-case, skip
+  it rather than covering it.
 """
+
+SAFETY_SYSTEM_PROMPT = """You are a content safety reviewer for a technology podcast script
+segment. Read the segment text and decide if it violates either rule:
+1. Contains vulgarity, profanity, or sexual content.
+2. Presents an unethical use-case, project, or example (e.g. surveillance abuse, exploit/attack
+   tooling meant to cause harm, discriminatory or privacy-violating systems) as something to
+   emulate or admire, rather than something to avoid or merely report as news.
+
+Respond with exactly one line: either "SAFE" or "FLAGGED: <one-sentence reason>". No other text.
+"""
+
+
+class ContentSafetyError(Exception):
+    def __init__(self, segment_label: str, reason: str):
+        self.segment_label = segment_label
+        self.reason = reason
+        super().__init__(f"{segment_label} segment failed content safety check: {reason}")
+
+
+def check_segment_safety(text: str) -> tuple[bool, str]:
+    messages = [
+        {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
+        {"role": "user", "content": text},
+    ]
+    verdict = call_groq(messages, max_tokens=60)
+    if verdict.strip().upper().startswith("SAFE"):
+        return True, ""
+    return False, verdict.strip()
+
+
+def _retry_with_safety_reminder(messages: list[dict], segment: str, reason: str, max_tokens: int) -> str:
+    messages.append({"role": "assistant", "content": segment})
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"That segment was flagged by a content safety review: {reason}. Rewrite it so it "
+                f"fully avoids vulgarity and does not present any unethical use-case, project, or "
+                f"example as something to emulate, while still covering the same underlying news "
+                f"items."
+            ),
+        }
+    )
+    return call_groq(messages, max_tokens=max_tokens)
+
 
 INTRO_TEMPLATE = (
     "Good morning. Here's your daily tech briefing for {date}. "
@@ -130,22 +183,6 @@ def build_architecture_prompt(items: list[dict], target_words: int, description:
     return "\n".join(lines)
 
 
-def call_groq(messages: list[dict], max_tokens: int = 1200) -> str:
-    from groq import Groq
-
-    api_key = os.environ["GROQ_API_KEY"]
-    model = os.environ.get("GROQ_MODEL", DEFAULT_MODEL)
-    client = Groq(api_key=api_key)
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.5,
-        max_tokens=max_tokens,
-    )
-    return response.choices[0].message.content.strip()
-
-
 def generate_topic_segment(topic_label: str, items: list[dict], target_words: int, description: str = "") -> str:
     messages = [
         {"role": "system", "content": SEGMENT_SYSTEM_PROMPT},
@@ -172,6 +209,14 @@ def generate_topic_segment(topic_label: str, items: list[dict], target_words: in
             }
         )
         segment = call_groq(messages, max_tokens=min(1600, target_words * 3))
+
+    is_safe, reason = check_segment_safety(segment)
+    if not is_safe:
+        log.warning("%s segment flagged by safety check (%s) - retrying once...", topic_label, reason)
+        segment = _retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1600, target_words * 3))
+        is_safe, reason = check_segment_safety(segment)
+        if not is_safe:
+            raise ContentSafetyError(topic_label, reason)
 
     return segment
 
@@ -202,6 +247,14 @@ def generate_architecture_segment(items: list[dict], target_words: int, descript
             }
         )
         segment = call_groq(messages, max_tokens=min(1800, target_words * 3))
+
+    is_safe, reason = check_segment_safety(segment)
+    if not is_safe:
+        log.warning("Architect's Corner flagged by safety check (%s) - retrying once...", reason)
+        segment = _retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1800, target_words * 3))
+        is_safe, reason = check_segment_safety(segment)
+        if not is_safe:
+            raise ContentSafetyError("The Architect's Corner", reason)
 
     return segment
 
@@ -246,41 +299,49 @@ def main() -> None:
     else:
         parts: list[str] = []
 
-        if topics_with_items:
-            budgets = allocate_word_budgets([(label, items) for label, items, _ in topics_with_items])
-            topic_names = [label for label, _, _ in topics_with_items]
-            topics_phrase = ", ".join(topic_names[:-1]) + (
-                f", and {topic_names[-1]}" if len(topic_names) > 1 else topic_names[0]
-            )
-            if arch_has_items:
-                topics_phrase += ", plus the Architect's Corner"
-            parts.append(INTRO_TEMPLATE.format(date=date, topics=topics_phrase))
-
-            for label, items, description in topics_with_items:
-                log.info(
-                    "Generating segment: %s (target ~%d words, %d items)", label, budgets[label], len(items)
-                )
-                parts.append(generate_topic_segment(label, items, budgets[label], description))
-        else:
-            # Tracked topics were quiet, but the Architect's Corner has something — still
-            # worth an episode rather than skipping the day entirely.
-            parts.append(
-                f"Good morning. Here's your daily tech briefing for {date}. "
-                "The tracked topics were quiet today, but we've got a good one for the "
-                "Architect's Corner. Let's get into it."
-            )
-
-        if arch_has_items:
-            arch_target = arch.get("target_words", 720)
-            log.info(
-                "Generating Architect's Corner (target ~%d words, %d items)", arch_target, len(arch["items"])
-            )
+        try:
             if topics_with_items:
-                parts.append(ARCHITECTURE_TRANSITION)
-            parts.append(generate_architecture_segment(arch["items"], arch_target, arch.get("description", "")))
+                budgets = allocate_word_budgets([(label, items) for label, items, _ in topics_with_items])
+                topic_names = [label for label, _, _ in topics_with_items]
+                topics_phrase = ", ".join(topic_names[:-1]) + (
+                    f", and {topic_names[-1]}" if len(topic_names) > 1 else topic_names[0]
+                )
+                if arch_has_items:
+                    topics_phrase += ", plus the Architect's Corner"
+                parts.append(INTRO_TEMPLATE.format(date=date, topics=topics_phrase))
 
-        parts.append(OUTRO_TEXT)
-        script_text = "\n\n".join(parts)
+                for label, items, description in topics_with_items:
+                    log.info(
+                        "Generating segment: %s (target ~%d words, %d items)", label, budgets[label], len(items)
+                    )
+                    parts.append(generate_topic_segment(label, items, budgets[label], description))
+            else:
+                # Tracked topics were quiet, but the Architect's Corner has something — still
+                # worth an episode rather than skipping the day entirely.
+                parts.append(
+                    f"Good morning. Here's your daily tech briefing for {date}. "
+                    "The tracked topics were quiet today, but we've got a good one for the "
+                    "Architect's Corner. Let's get into it."
+                )
+
+            if arch_has_items:
+                arch_target = arch.get("target_words", 720)
+                log.info(
+                    "Generating Architect's Corner (target ~%d words, %d items)", arch_target, len(arch["items"])
+                )
+                if topics_with_items:
+                    parts.append(ARCHITECTURE_TRANSITION)
+                parts.append(generate_architecture_segment(arch["items"], arch_target, arch.get("description", "")))
+
+            parts.append(OUTRO_TEXT)
+            script_text = "\n\n".join(parts)
+        except ContentSafetyError as e:
+            log.error(
+                "CONTENT SAFETY CHECK BLOCKED PUBLISH for %s: %s segment - %s. No script/transcript "
+                "written; today's episode (app + YouTube) will not publish.",
+                date, e.segment_label, e.reason,
+            )
+            raise SystemExit(f"Content safety check blocked publish for {date}: {e}") from e
 
     script_path = data_dir / f"script_{date}.md"
     with open(script_path, "w", encoding="utf-8") as f:
