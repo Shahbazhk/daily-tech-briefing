@@ -5,7 +5,7 @@
 |---|---|
 | Document Owner | Shahbaz |
 | Status | Draft v0.1 |
-| Last Updated | 2026-08-02 |
+| Last Updated | 2026-08-03 |
 | Platform | Android (v1) |
 
 ---
@@ -88,6 +88,13 @@ adjacent tools the user may add later (e.g., Maven, RabbitMQ, Elasticsearch, CI/
 security/CVE alerts relevant to the above).
 
 > Topic list must be config-driven (not hardcoded), so topics can be added/removed/reordered without code changes.
+
+> Since 2026-08-03, script generation is gated by a content-safety guardrail (no vulgarity/
+> profanity, no unethical use-cases/projects presented as case studies to emulate) — a
+> prompt-level instruction backed by a per-segment automated check, since this content now
+> publishes unattended to YouTube in addition to the personal app. A segment that's still
+> flagged after one retry withholds that day's script entirely rather than publish it; see
+> Section 14.9.
 
 ## 8. Functional Requirements
 
@@ -236,6 +243,43 @@ v1 ships as a personal sideload / internal-testing build, but since Play Store i
 - **Privacy policy:** even a single-user free app needs a privacy policy URL before Play Store submission if it uses Firebase (FCM registration tokens, Firestore) — a simple static page is enough; not needed for v1 sideload, but worth a placeholder note now.
 - **Sensible defaults:** proper app icon, versionCode/versionName scheme, and a `RELEASE`-vs-`DEBUG` build config from the start, so the same codebase can later produce a Play-ready release build without restructuring.
 - Everything above costs $0 and is just "build it the right way the first time" — no separate Play Store spend is needed until/unless you actually publish (Google's one-time $25 developer registration fee only applies at that point, not now).
+
+### 14.9 YouTube video publishing (added 2026-08-03) — free, unattended, additive to the app path
+
+Each day's episode is now also rendered into a video and uploaded to the user's existing
+YouTube channel/playlist, alongside (not instead of) the existing Android/Firebase delivery.
+Full design rationale and rejected alternatives: `docs/superpowers/specs/2026-08-03-youtube-video-design.md`.
+
+- **Visual style — cover art + karaoke-style captions:** a single static branded cover image
+  (built once, committed under `pipeline/video/assets/`) with the script's own words burned in
+  as captions, timed to the narration using the per-chunk timing Kokoro's TTS pass already
+  produces (`tts/synthesize.py` → `captions_<date>.json`) — no separate forced-alignment/ASR
+  tool needed, and no drift risk between audio and captions. Rendered with `ffmpeg`
+  (`video/build_video.py`), already a pipeline dependency for MP3 conversion. A per-topic
+  infographic slide deck was considered and deferred as meaningfully more build/maintenance
+  surface for this iteration.
+- **Thumbnails:** templated and Pillow-based (`video/thumbnail.py`), not AI-generated — the
+  day's dominant topic (first entry in `topics_covered`) picks an accent color/template, with
+  date and topic list overlaid as text. Deterministic, instant, and can't rate-limit or produce
+  off-topic output, which matters for a job that must run unattended with no one watching it.
+- **Metadata:** one additional Groq call per day (`video/metadata.py`), reusing the same
+  free-tier open-weight model already writing the script, generates title/description/tags from
+  that day's approved script text, including a fixed disclosure line that narration is
+  AI-generated and content is aggregated from public sources.
+- **Upload:** `publish/youtube_publish.py` (`google-api-python-client` + `google-auth`) uploads
+  the video (Public, Science & Technology category, YouTube's synthetic-media disclosure flag
+  set, per policy for AI-narrated content), sets the thumbnail, and adds it to the configured
+  playlist. Runs as its own stage after the existing Firebase publish stage, so a YouTube-side
+  failure can never block the Android app's episode delivery.
+- **Auth:** a one-time OAuth 2.0 Desktop-app client (`auth/youtube_oauth_setup.py`, run locally
+  only — see README) mints a refresh token stored as a GitHub Actions secret. Unverified Google
+  OAuth apps have refresh tokens that expire after 7 days, which would silently break
+  unattended daily uploads — per the user's decision, this project goes through Google's free
+  OAuth verification process for a non-expiring token; while verification is pending, the
+  upload stage detects an expired/revoked token and logs a clearly-flagged warning rather than
+  failing silently.
+- **Cost:** $0/month — runs entirely on the YouTube Data API v3's free quota and tools already
+  used elsewhere in this stack (Groq, ffmpeg, GitHub Actions); no new paid service.
 
 ## 15. Future Enhancements (Phase 2+)
 

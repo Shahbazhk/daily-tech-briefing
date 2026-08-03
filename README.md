@@ -9,7 +9,8 @@ Section 14 for the free/open-source stack decisions this scaffold implements).
 
 ```
 pipeline/            Python automation: collect news -> write script (Groq/open-weight LLM)
-                      -> synthesize audio (Kokoro, open-weight TTS) -> publish (Firebase)
+                      -> synthesize audio (Kokoro, open-weight TTS) -> build video (cover art +
+                      synced captions) -> publish (Firebase) -> upload video to YouTube
 .github/workflows/    GitHub Actions cron job that runs the pipeline daily, for free
 android-app/          Android (Kotlin) app: plays the daily episode, push notification
 ```
@@ -48,10 +49,30 @@ Everything here targets **$0/month** — see BRD Section 14.7 for the full cost 
 > notifications in that mode; the app would need to poll GitHub Releases instead (not yet wired
 > up in the app skeleton — flag if you want this path instead of Firebase).
 
-### 5. GitHub Actions secrets
+### 5. Google Cloud / YouTube (free, for the daily video upload)
+1. https://console.cloud.google.com → create a new project (or reuse one) → **APIs & Services
+   → Library** → enable **YouTube Data API v3**.
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID** → application type
+   **Desktop app**. Note the client ID and client secret.
+3. Locally (never in CI) with those two values exported as `YOUTUBE_CLIENT_ID` and
+   `YOUTUBE_CLIENT_SECRET`, run `python pipeline/auth/youtube_oauth_setup.py`. It opens a
+   browser for you to sign in and grant access to your YouTube channel, then prints a refresh
+   token — this becomes `YOUTUBE_REFRESH_TOKEN`.
+4. Note the ID of the existing YouTube playlist you want episodes added to (the `list=...` part
+   of its URL) — this becomes `YOUTUBE_PLAYLIST_ID`.
+
+> Google treats OAuth apps that haven't been through its verification review as "Testing" apps,
+> whose refresh tokens expire after **7 days** — fine for the local test run above, but it would
+> silently break unattended daily uploads once this runs on a schedule. This project goes
+> through Google's (free) OAuth verification process to get a non-expiring token for long-term
+> unattended use; see `docs/superpowers/specs/2026-08-03-youtube-video-design.md` (Section 8.2)
+> for what that involves and how the pipeline behaves while verification is still pending.
+
+### 6. GitHub Actions secrets
 In your repo → **Settings → Secrets and variables → Actions**, add:
 `GROQ_API_KEY`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`,
-`FIREBASE_SERVICE_ACCOUNT` (paste the whole service-account JSON), `FIREBASE_STORAGE_BUCKET`.
+`FIREBASE_SERVICE_ACCOUNT` (paste the whole service-account JSON), `FIREBASE_STORAGE_BUCKET`,
+`YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`, `YOUTUBE_PLAYLIST_ID`.
 
 ## Running the pipeline locally
 
