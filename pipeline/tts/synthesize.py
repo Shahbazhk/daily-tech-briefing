@@ -14,6 +14,7 @@ Requires (installed by the CI workflow, see .github/workflows/daily-episode.yml)
     convert Kokoro's WAV output to a much smaller MP3 for app delivery.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -35,15 +36,29 @@ DEFAULT_LANG_CODE = "a"
 DEFAULT_VOICE = "af_heart"
 
 
-def run_kokoro(text: str, lang_code: str, voice: str, wav_out: Path) -> None:
+def build_caption_cues(chunks: list[tuple[str, np.ndarray]], sample_rate: int) -> list[dict]:
+    cues = []
+    cursor = 0.0
+    for text, audio in chunks:
+        duration = len(audio) / sample_rate
+        cues.append({"text": text.strip(), "start": round(cursor, 3), "end": round(cursor + duration, 3)})
+        cursor += duration
+    return cues
+
+
+def run_kokoro(text: str, lang_code: str, voice: str, wav_out: Path, captions_out: Path) -> None:
     from kokoro import KPipeline
 
     log.info("Running Kokoro (lang_code=%s, voice=%s)", lang_code, voice)
     pipeline = KPipeline(lang_code=lang_code)
-    chunks = [audio for _, _, audio in pipeline(text, voice=voice)]
+    chunks = [(graphemes, audio) for graphemes, _, audio in pipeline(text, voice=voice)]
     if not chunks:
         raise RuntimeError("Kokoro produced no audio for this script")
-    audio = np.concatenate([np.asarray(chunk) for chunk in chunks])
+
+    cues = build_caption_cues(chunks, SAMPLE_RATE)
+    captions_out.write_text(json.dumps(cues, indent=2), encoding="utf-8")
+
+    audio = np.concatenate([np.asarray(chunk) for _, chunk in chunks])
     sf.write(str(wav_out), audio, SAMPLE_RATE)
 
 
@@ -72,12 +87,14 @@ def main() -> None:
 
     wav_path = data_dir / f"episode_{date}.wav"
     mp3_path = data_dir / f"episode_{date}.mp3"
+    captions_path = data_dir / f"captions_{date}.json"
 
-    run_kokoro(text, lang_code, voice, wav_path)
+    run_kokoro(text, lang_code, voice, wav_path, captions_path)
     convert_to_mp3(wav_path, mp3_path)
     wav_path.unlink(missing_ok=True)
 
     log.info("Wrote %s (%.1f MB)", mp3_path, mp3_path.stat().st_size / 1_000_000)
+    log.info("Wrote %s", captions_path)
 
 
 if __name__ == "__main__":
