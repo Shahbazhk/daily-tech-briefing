@@ -9,3 +9,6 @@ groq==0.11.0
 # 'proxies'). Pin httpx below that until groq is bumped past this.
 httpx==0.27.2
 firebase-admin==6.5.0
+soundfile==0.12.1
+kokoro==0.9.4
+numpy==1.26.4

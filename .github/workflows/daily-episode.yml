@@ -32,23 +32,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system deps (ffmpeg for WAV -> MP3)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install system deps (ffmpeg for WAV -> MP3, espeak-ng for Kokoro's phonemizer)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng
+
+      - name: Install PyTorch (CPU-only build - the default PyPI wheel pulls in unused CUDA libs)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install Python deps
-        run: |
-          pip install -r pipeline/requirements.txt
-          pip install piper-tts
-
-      - name: Download Piper voice model (open-source, one-time per run)
-        run: |
-          mkdir -p pipeline/tts/piper
-          # en_US-lessac-medium is a good default natural-sounding voice.
-          # If this voice name ever becomes unavailable, see the current list at
-          # https://github.com/rhasspy/piper (VOICES.md) and update here.
-          python -m piper.download_voices en_US-lessac-medium --data-dir pipeline/tts/piper
-          MODEL_PATH=$(find pipeline/tts/piper -name '*.onnx' | head -n 1)
-          echo "PIPER_VOICE_MODEL=$MODEL_PATH" >> "$GITHUB_ENV"
+        run: pip install -r pipeline/requirements.txt
 
       - name: Run pipeline (collect -> script -> TTS -> publish)
         run: python pipeline/run_pipeline.py

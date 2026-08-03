@@ -9,7 +9,7 @@ Section 14 for the free/open-source stack decisions this scaffold implements).
 
 ```
 pipeline/            Python automation: collect news -> write script (Groq/open-weight LLM)
-                      -> synthesize audio (Piper, open-source TTS) -> publish (Firebase)
+                      -> synthesize audio (Kokoro, open-weight TTS) -> publish (Firebase)
 .github/workflows/    GitHub Actions cron job that runs the pipeline daily, for free
 android-app/          Android (Kotlin) app: plays the daily episode, push notification
 ```
@@ -66,17 +66,20 @@ cp ../.env.example ../.env   # fill in values, then export them into your shell,
 python run_pipeline.py --skip-publish   # collect + write script + synthesize audio only
 ```
 
-Piper and ffmpeg aren't in `requirements.txt` (they're installed as a separate CLI/binary,
-see the workflow step "Download Piper voice model") — for local runs, `pip install piper-tts`
-and `python -m piper.download_voices en_US-lessac-medium` once, same as CI does.
+ffmpeg and espeak-ng aren't in `requirements.txt` (they're system packages, see the workflow
+steps that `apt-get install` them) — for local runs on Linux/macOS, install both with your
+package manager once, same as CI does. `torch` is also installed separately as a CPU-only
+build (`pip install torch --index-url https://download.pytorch.org/whl/cpu`) to avoid pulling
+in unused CUDA libraries.
 
 Outputs land in `pipeline/data/` (gitignored): `collected_<date>.json`, `script_<date>.md`,
 `transcript_<date>.json`, `episode_<date>.mp3`.
 
 ## Running the daily job
 
-Already wired up in `.github/workflows/daily-episode.yml` — cron-scheduled for 03:00 UTC
-(06:00 AM AST, a 2-hour buffer before the 8 AM delivery target). You can also trigger it
+Already wired up in `.github/workflows/daily-episode.yml` — cron-scheduled for 00:00 UTC
+(03:00 AM AST, a 5-hour buffer before the 8 AM delivery target, since GitHub's `schedule`
+trigger is best-effort and can be delayed by hours under load). You can also trigger it
 manually from the **Actions** tab (**Run workflow**) to test end-to-end before relying on the
 schedule.
 
@@ -93,8 +96,9 @@ schedule.
 - **RSS feed URLs** in `pipeline/config/sources.yaml` are best-effort defaults; official blogs
   occasionally move their feeds. The collector logs and skips a broken URL rather than failing
   the whole run, but worth spot-checking once.
-- **Piper voice name** (`en_US-lessac-medium`) in the workflow — if it's ever retired, check
-  https://github.com/rhasspy/piper for the current voice list.
+- **Kokoro voice name** (`af_heart`) in `pipeline/tts/synthesize.py` — see
+  https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md for the full voice list if
+  you want to swap it (e.g. for a male voice, try `am_michael`).
 - **Groq model id** (`llama-3.3-70b-versatile`) — Groq's free-tier model lineup changes over
   time; check https://console.groq.com/docs/models if `generate_script.py` starts 404ing, and
   override via the `GROQ_MODEL` env var without touching code.

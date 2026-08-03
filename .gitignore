@@ -11,8 +11,7 @@ __pycache__/
 venv/
 pipeline/data/
 
-# Piper voice models / binaries (downloaded by CI, not committed)
-pipeline/tts/piper/
+# Kokoro model weights (downloaded by CI, not committed)
 *.onnx
 *.onnx.json
 

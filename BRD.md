@@ -194,13 +194,13 @@ Decision made 2026-08-02: pipeline runs on **free cloud automation** (not the us
 - Both keep us strictly within "open-weight model" scope — the *model* is open source (Meta/Mistral/Google/Qwen), only the *inference hosting* is a free hosted API rather than your own GPU.
 
 ### 14.3 Text-to-Speech — fully open-source, runs inside the same job
-- **[Piper TTS](https://github.com/rhasspy/piper)** — open-source (MIT), lightweight neural TTS, runs on CPU (no GPU needed), fast enough to render ~20 minutes of audio well within a CI job's time budget. Runs *locally inside the automation job itself*, so this stage makes zero external calls.
-- Natural-sounding voice models are themselves open and freely downloadable.
+- **[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)** — open-weight (Apache-2.0) neural TTS, runs on CPU (no GPU needed), fast enough to render a full episode well within a CI job's time budget. Runs *locally inside the automation job itself*, so this stage makes zero external calls. Switched from Piper TTS on 2026-08-03 — same open-weight/self-hosted/zero-cost constraints, but noticeably more natural prosody and intonation; Piper's voice was reported as sounding too artificial.
+- Voice: `af_heart` (Kokoro's flagship American-English voice). Full voice list is itself open and freely downloadable.
 
 ### 14.4 Orchestration & Scheduling — free
-- **GitHub Actions** scheduled workflow (`on: schedule: cron:`), triggered at **03:00 UTC = 06:00 AM AST** — leaves a buffer before the 08:00 AM AST deadline for collection + LLM + TTS + publish steps.
-- Public repos get unlimited free Actions minutes; private repos get 2,000 free minutes/month on the free GitHub plan — either is enough for one ~10–15 minute daily job.
-- Workflow steps: checkout → install Python deps → run collector → call Groq API for script → run Piper TTS → publish output (14.5) → done.
+- **GitHub Actions** scheduled workflow (`on: schedule: cron:`), triggered at **00:00 UTC = 03:00 AM AST** — a 5-hour buffer before the 08:00 AM AST deadline (widened from 2 hours on 2026-08-03 after a scheduled run fired 3h27m late — GitHub's `schedule` trigger is best-effort and can be delayed under load).
+- Public repos get unlimited free Actions minutes; private repos get 2,000 free minutes/month on the free GitHub plan — either is enough for one daily job.
+- Workflow steps: checkout → install Python deps → run collector → call Groq API for script → run Kokoro TTS → publish output (14.5) → done.
 
 ### 14.5 Storage & Delivery to the Android App — free
 - **Firebase (Spark — free plan)**:
@@ -221,7 +221,7 @@ Decision made 2026-08-02: pipeline runs on **free cloud automation** (not the us
 |---|---|---|
 | Content collection | RSS + GitHub API + HN API + Reddit API | $0 |
 | AI scripting | Groq free-tier API (open-weight models) | $0 |
-| Text-to-speech | Piper (self-hosted, open-source) | $0 |
+| Text-to-speech | Kokoro-82M (self-hosted, open-weight) | $0 |
 | Orchestration | GitHub Actions | $0 |
 | Storage + push notification | Firebase Spark (free plan) | $0 |
 | Android app toolchain | Kotlin, Android Studio, Media3 | $0 |
