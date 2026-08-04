@@ -62,26 +62,35 @@ def build_youtube_client():
     return build("youtube", "v3", credentials=creds)
 
 
+def _episode_date_marker(date: str) -> str:
+    # A marker the code controls directly, rather than relying on the LLM-generated
+    # title/description to happen to contain the ISO date - confirmed via a live
+    # workflow run that they don't (e.g. "Aug 4: Java, Kafka, Docker" contains no
+    # trace of "2026-08-04"), which silently defeated the idempotency check below.
+    return f"[Episode date: {date}]"
+
+
 def video_already_uploaded(youtube, playlist_id: str, date: str) -> bool:
+    marker = _episode_date_marker(date)
     page_token = None
     while True:
         response = youtube.playlistItems().list(
             part="snippet", playlistId=playlist_id, maxResults=50, pageToken=page_token
         ).execute()
-        if any(date in item["snippet"]["title"] for item in response.get("items", [])):
+        if any(marker in item["snippet"].get("description", "") for item in response.get("items", [])):
             return True
         page_token = response.get("nextPageToken")
         if not page_token:
             return False
 
 
-def upload_video(youtube, video_path: Path, metadata: dict) -> str:
+def upload_video(youtube, video_path: Path, metadata: dict, date: str) -> str:
     from googleapiclient.http import MediaFileUpload
 
     body = {
         "snippet": {
             "title": metadata["title"],
-            "description": metadata["description"],
+            "description": f"{metadata['description']}\n\n{_episode_date_marker(date)}",
             "tags": metadata["tags"],
             "categoryId": CATEGORY_SCIENCE_AND_TECHNOLOGY,
         },
@@ -156,7 +165,7 @@ def main() -> None:
     (data_dir / f"youtube_metadata_{date}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
 
     log.info("Uploading %s to YouTube...", video_path.name)
-    video_id = upload_video(youtube, video_path, result)
+    video_id = upload_video(youtube, video_path, result, date)
     log.info("Uploaded video id %s, setting thumbnail...", video_id)
     set_thumbnail(youtube, video_id, thumbnail_path)
     log.info("Adding to playlist %s...", playlist_id)
