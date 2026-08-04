@@ -44,6 +44,10 @@ def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
     # ffmpeg's subtitles filter argument needs colons escaped (it uses ':' as its
     # own option separator) - this always runs on the Linux GitHub Actions runner.
     srt_arg = str(srt_path).replace("\\", "/").replace(":", "\\:")
+    # Render to a temp path first and only rename to out_path on success, so a
+    # failed/partial ffmpeg run never leaves a corrupt file where a good one
+    # (from a prior successful run) used to be.
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
@@ -56,10 +60,15 @@ def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
         "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",
         "-shortest",
-        str(out_path),
+        str(tmp_path),
     ]
     log.info("Running: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        tmp_path.unlink(missing_ok=True)
+        log.error("ffmpeg failed (exit %d):\n%s", result.returncode, result.stderr)
+        raise subprocess.CalledProcessError(result.returncode, cmd, stderr=result.stderr)
+    tmp_path.replace(out_path)
 
 
 def main() -> None:

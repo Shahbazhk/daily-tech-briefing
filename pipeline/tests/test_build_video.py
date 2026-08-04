@@ -1,5 +1,7 @@
+import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "video"))
 import build_video  # noqa: E402
@@ -22,3 +24,39 @@ def test_build_srt_formats_multiple_cues():
         "1\n00:00:00,000 --> 00:00:01,000\nHello there.\n\n"
         "2\n00:00:01,000 --> 00:00:02,500\nSecond cue.\n"
     )
+
+
+def test_render_video_renames_temp_file_to_out_path_on_success(tmp_path):
+    out_path = tmp_path / "video_2026-08-03.mp4"
+    tmp_render_path = tmp_path / "video_2026-08-03.mp4.tmp"
+
+    def fake_run(cmd, **kwargs):
+        tmp_render_path.write_bytes(b"fake mp4 bytes")
+        return subprocess.CompletedProcess(cmd, returncode=0, stderr="")
+
+    with patch("build_video.subprocess.run", side_effect=fake_run):
+        build_video.render_video(tmp_path / "episode.mp3", tmp_path / "captions.srt", out_path)
+
+    assert out_path.read_bytes() == b"fake mp4 bytes"
+    assert not tmp_render_path.exists()
+
+
+def test_render_video_removes_temp_file_and_raises_on_ffmpeg_failure(tmp_path):
+    out_path = tmp_path / "video_2026-08-03.mp4"
+    out_path.write_bytes(b"previously good video")
+    tmp_render_path = tmp_path / "video_2026-08-03.mp4.tmp"
+
+    def fake_run(cmd, **kwargs):
+        tmp_render_path.write_bytes(b"partial garbage")
+        return subprocess.CompletedProcess(cmd, returncode=1, stderr="ffmpeg: fatal error")
+
+    with patch("build_video.subprocess.run", side_effect=fake_run):
+        try:
+            build_video.render_video(tmp_path / "episode.mp3", tmp_path / "captions.srt", out_path)
+            assert False, "expected CalledProcessError"
+        except subprocess.CalledProcessError as exc:
+            assert exc.returncode == 1
+            assert "ffmpeg: fatal error" in exc.stderr
+
+    assert not tmp_render_path.exists()
+    assert out_path.read_bytes() == b"previously good video"
