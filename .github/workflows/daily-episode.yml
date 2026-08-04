@@ -36,8 +36,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system deps (ffmpeg for WAV -> MP3, espeak-ng for Kokoro's phonemizer)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng
+      - name: Install system deps (ffmpeg for WAV -> MP3, espeak-ng for Kokoro's phonemizer, fonts for captions/thumbnail)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core
 
       - name: Install PyTorch (CPU-only build - the default PyPI wheel pulls in unused CUDA libs)
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -45,7 +45,7 @@ jobs:
       - name: Install Python deps
         run: pip install -r pipeline/requirements.txt
 
-      - name: Run pipeline (collect -> script -> TTS -> publish)
+      - name: Run pipeline (collect -> script -> TTS -> build_video -> publish -> youtube_publish)
         run: python pipeline/run_pipeline.py
 
       - name: Fallback - attach episode to a GitHub Release (only if Firebase isn't configured)

@@ -76,7 +76,7 @@ def video_already_uploaded(youtube, playlist_id: str, date: str) -> bool:
     while True:
         response = youtube.playlistItems().list(
             part="snippet", playlistId=playlist_id, maxResults=50, pageToken=page_token
-        ).execute()
+        ).execute(num_retries=3)
         if any(marker in item["snippet"].get("description", "") for item in response.get("items", [])):
             return True
         page_token = response.get("nextPageToken")
@@ -107,14 +107,16 @@ def upload_video(youtube, video_path: Path, metadata: dict, date: str) -> str:
     )
     response = None
     while response is None:
-        _, response = request.next_chunk()
+        _, response = request.next_chunk(num_retries=5)
     return response["id"]
 
 
 def set_thumbnail(youtube, video_id: str, thumbnail_path: Path) -> None:
     from googleapiclient.http import MediaFileUpload
 
-    youtube.thumbnails().set(videoId=video_id, media_body=MediaFileUpload(str(thumbnail_path))).execute()
+    youtube.thumbnails().set(
+        videoId=video_id, media_body=MediaFileUpload(str(thumbnail_path))
+    ).execute(num_retries=3)
 
 
 def add_to_playlist(youtube, playlist_id: str, video_id: str) -> None:
@@ -126,7 +128,7 @@ def add_to_playlist(youtube, playlist_id: str, video_id: str) -> None:
                 "resourceId": {"kind": "youtube#video", "videoId": video_id},
             }
         },
-    ).execute()
+    ).execute(num_retries=3)
 
 
 def main() -> None:
@@ -151,7 +153,12 @@ def main() -> None:
     try:
         youtube = build_youtube_client()
     except YouTubeAuthError as e:
+        # This is caught and handled *inside* this stage's own main(), so it never
+        # raises back out to run_pipeline.run_stage() - without this annotation, a
+        # GitHub Actions run with an expired/revoked token would report the whole
+        # job as green with the only trace being a log line nobody is watching.
         log.error("YOUTUBE AUTH FAILURE (action needed): %s", e)
+        print(f"::error::YouTube auth failure (action needed): {e}")
         return
 
     if video_already_uploaded(youtube, playlist_id, date):
@@ -166,10 +173,19 @@ def main() -> None:
 
     log.info("Uploading %s to YouTube...", video_path.name)
     video_id = upload_video(youtube, video_path, result, date)
-    log.info("Uploaded video id %s, setting thumbnail...", video_id)
-    set_thumbnail(youtube, video_id, thumbnail_path)
-    log.info("Adding to playlist %s...", playlist_id)
+    log.info("Uploaded video id %s, adding to playlist %s...", video_id, playlist_id)
+    # Add to the playlist immediately after the video exists - this is what makes the
+    # video discoverable by video_already_uploaded()'s marker check. Setting the
+    # thumbnail is comparatively low-stakes, so it runs after and is isolated: if it
+    # fails, the video is still correctly published and idempotency still holds,
+    # rather than a thumbnail hiccup leaving a live, playlist-less video that the
+    # next run can't detect and re-uploads.
     add_to_playlist(youtube, playlist_id, video_id)
+
+    try:
+        set_thumbnail(youtube, video_id, thumbnail_path)
+    except Exception:
+        log.exception("Failed to set thumbnail for video %s - video is still published, continuing.", video_id)
 
     log.info("Published YouTube video %s: %s", video_id, result["title"])
 

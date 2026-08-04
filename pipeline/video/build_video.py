@@ -40,16 +40,21 @@ def build_srt(cues: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def temp_render_path(out_path: Path) -> Path:
+    # Keep the .mp4 extension last - ffmpeg infers the output container format from
+    # the final filename extension, so a ".mp4.tmp" name fails with "Unable to
+    # choose an output format" (confirmed against a real ffmpeg run).
+    return out_path.with_name(out_path.stem + ".tmp" + out_path.suffix)
+
+
 def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
     # ffmpeg's subtitles filter argument needs colons escaped (it uses ':' as its
     # own option separator) - this always runs on the Linux GitHub Actions runner.
     srt_arg = str(srt_path).replace("\\", "/").replace(":", "\\:")
     # Render to a temp path first and only rename to out_path on success, so a
     # failed/partial ffmpeg run never leaves a corrupt file where a good one
-    # (from a prior successful run) used to be. Keep the .mp4 extension last —
-    # ffmpeg infers the output container format from the final extension, so
-    # a ".mp4.tmp" name fails with "Unable to choose an output format".
-    tmp_path = out_path.with_name(out_path.stem + ".tmp" + out_path.suffix)
+    # (from a prior successful run) used to be.
+    tmp_path = temp_render_path(out_path)
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",

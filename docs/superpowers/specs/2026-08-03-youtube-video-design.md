@@ -204,10 +204,16 @@ process:
 
 ### 8.4 Idempotency
 
-Before uploading, check whether a video for that date already exists (e.g.
-search the playlist for a title/date match). Re-running the workflow the
-same day (as already happens during manual testing) must not create a
-duplicate upload.
+Before uploading, check whether a video for that date already exists.
+Live testing during implementation proved that matching the date against
+the video *title* doesn't work: LLM-generated titles ("Aug 4: Java, Kafka,
+Docker") don't reliably contain the ISO date, so a title/date search
+silently fails to find the existing video and re-uploads a duplicate. The
+implementation instead embeds a code-controlled marker
+(`[Episode date: YYYY-MM-DD]`) in the video *description* at upload time,
+and checks the playlist's descriptions for that exact marker. Re-running the
+workflow the same day (as already happens during manual testing) must not
+create a duplicate upload.
 
 ## 9. Error handling
 

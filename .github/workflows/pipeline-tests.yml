@@ -1,0 +1,30 @@
+name: Pipeline Tests
+
+on:
+  push:
+    paths:
+      - "pipeline/**"
+      - ".github/workflows/pipeline-tests.yml"
+  pull_request:
+    paths:
+      - "pipeline/**"
+      - ".github/workflows/pipeline-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyTorch (CPU-only build - the default PyPI wheel pulls in unused CUDA libs)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Python deps
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run pipeline test suite
+        run: cd pipeline && python -m pytest tests/ -v

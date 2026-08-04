@@ -71,7 +71,13 @@ def convert_to_mp3(wav_path: Path, mp3_path: Path) -> None:
         str(mp3_path),
     ]
     log.info("Running: %s", " ".join(cmd))
-    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if result.returncode != 0:
+        # This stage is required (unlike build_video's non-critical render), so a
+        # bare CalledProcessError with no captured output would kill the whole
+        # day's episode - including app delivery - with no diagnosable error.
+        log.error("ffmpeg (wav->mp3) failed (exit %d):\n%s", result.returncode, result.stderr)
+        raise subprocess.CalledProcessError(result.returncode, cmd, stderr=result.stderr)
 
 
 def main() -> None:

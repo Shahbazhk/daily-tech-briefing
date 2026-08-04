@@ -29,11 +29,17 @@ def run_stage(name: str, module_path: str, required: bool = True) -> bool:
         if required:
             raise
         log.error("=== Stage %s exited early (%s) - continuing, this stage is non-critical ===", name, e)
+        # A non-required stage failing still means today's episode is incomplete
+        # (e.g. no video/upload) - a green pipeline log with only a log.error buried
+        # in it is easy to miss. The `::error::` prefix makes GitHub Actions surface
+        # this as a run annotation even though the job itself still succeeds.
+        print(f"::error::Pipeline stage '{name}' exited early: {e}")
         return False
-    except Exception:
+    except Exception as e:
         if required:
             raise
         log.exception("=== Stage %s failed - continuing, this stage is non-critical ===", name)
+        print(f"::error::Pipeline stage '{name}' failed: {e}")
         return False
     log.info("=== Done: %s (%.1fs) ===", name, time.time() - start)
     return True

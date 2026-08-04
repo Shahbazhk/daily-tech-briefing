@@ -46,8 +46,11 @@ This project's only use of Google/YouTube data is to manage content on the
 The project does **not** access, read, or store any other Google user's
 data. It does not access viewer data, comments, analytics, or any other
 YouTube channel besides the operator's own. The OAuth refresh token used for
-this is stored only as an encrypted GitHub Actions secret on the operator's
-own private automation repository and is never transmitted anywhere else.
+this is stored as an encrypted GitHub Actions secret (encrypted at rest,
+never exposed in workflow logs or to forks of the repository) and is never
+committed to source control or transmitted anywhere else. The automation's
+source code is in a public GitHub repository, but this secret is not part
+of that code and is not visible in it.
 
 ## Data this project does not collect
 
