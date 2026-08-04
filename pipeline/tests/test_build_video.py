@@ -28,7 +28,7 @@ def test_build_srt_formats_multiple_cues():
 
 def test_render_video_renames_temp_file_to_out_path_on_success(tmp_path):
     out_path = tmp_path / "video_2026-08-03.mp4"
-    tmp_render_path = tmp_path / "video_2026-08-03.mp4.tmp"
+    tmp_render_path = tmp_path / "video_2026-08-03.tmp.mp4"
 
     def fake_run(cmd, **kwargs):
         tmp_render_path.write_bytes(b"fake mp4 bytes")
@@ -44,7 +44,7 @@ def test_render_video_renames_temp_file_to_out_path_on_success(tmp_path):
 def test_render_video_removes_temp_file_and_raises_on_ffmpeg_failure(tmp_path):
     out_path = tmp_path / "video_2026-08-03.mp4"
     out_path.write_bytes(b"previously good video")
-    tmp_render_path = tmp_path / "video_2026-08-03.mp4.tmp"
+    tmp_render_path = tmp_path / "video_2026-08-03.tmp.mp4"
 
     def fake_run(cmd, **kwargs):
         tmp_render_path.write_bytes(b"partial garbage")
@@ -60,3 +60,14 @@ def test_render_video_removes_temp_file_and_raises_on_ffmpeg_failure(tmp_path):
 
     assert not tmp_render_path.exists()
     assert out_path.read_bytes() == b"previously good video"
+
+
+def test_render_video_temp_path_keeps_mp4_extension_last():
+    # ffmpeg infers the output container format from the final filename
+    # extension - a temp name like "video.mp4.tmp" breaks that inference
+    # (confirmed against a real ffmpeg run: "Unable to choose an output
+    # format"). The temp path must end in .mp4, not .tmp.
+    out_path = Path("/data/video_2026-08-03.mp4")
+    tmp_path = out_path.with_name(out_path.stem + ".tmp" + out_path.suffix)
+    assert tmp_path.suffix == ".mp4"
+    assert tmp_path.name == "video_2026-08-03.tmp.mp4"

@@ -46,8 +46,10 @@ def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
     srt_arg = str(srt_path).replace("\\", "/").replace(":", "\\:")
     # Render to a temp path first and only rename to out_path on success, so a
     # failed/partial ffmpeg run never leaves a corrupt file where a good one
-    # (from a prior successful run) used to be.
-    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    # (from a prior successful run) used to be. Keep the .mp4 extension last —
+    # ffmpeg infers the output container format from the final extension, so
+    # a ".mp4.tmp" name fails with "Unable to choose an output format".
+    tmp_path = out_path.with_name(out_path.stem + ".tmp" + out_path.suffix)
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
