@@ -6,4 +6,6 @@
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="notification_channel_name">Daily Episode</string>
+    <string name="history">History</string>
+    <string name="history_unavailable">History unavailable — check your connection.</string>
 </resources>
