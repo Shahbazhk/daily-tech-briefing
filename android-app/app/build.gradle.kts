@@ -52,4 +52,9 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.4.1")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    testImplementation("junit:junit:4.13.2")
+    // android.jar's org.json classes are stubs in local unit tests (throw "not mocked");
+    // this pulls in the real reference implementation for the JVM test classpath.
+    testImplementation("org.json:json:20240303")
 }
