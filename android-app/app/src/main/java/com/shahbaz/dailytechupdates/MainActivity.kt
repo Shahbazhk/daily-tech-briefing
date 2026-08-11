@@ -1,5 +1,6 @@
 package com.shahbaz.dailytechupdates
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -12,6 +13,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var player: ExoPlayer
+    private lateinit var downloadStore: DownloadStore
     private val repository = EpisodeRepository()
     private var isPlaying = false
 
@@ -21,9 +23,14 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         player = ExoPlayer.Builder(this).build()
+        downloadStore = DownloadStore(applicationContext)
+        downloadStore.purgeExpired()
 
         binding.playPauseButton.setOnClickListener { togglePlayback() }
         binding.statusText.setOnClickListener { loadTodayEpisode() }
+        binding.historyButton.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
 
         loadTodayEpisode()
     }
@@ -43,7 +50,8 @@ class MainActivity : AppCompatActivity() {
             binding.dateText.text = episode.date
             binding.topicsText.text = episode.topicsCovered.joinToString(" • ")
             binding.statusText.text = getString(R.string.ready_to_play)
-            player.setMediaItem(MediaItem.fromUri(episode.audioUrl))
+            val uri = resolvePlaybackUri(episode.audioUrl, downloadStore.localPathFor(episode.date))
+            player.setMediaItem(MediaItem.fromUri(uri))
             player.prepare()
         }
     }
@@ -61,6 +69,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         player.release()
+        downloadStore.unregister()
         super.onDestroy()
     }
 }
