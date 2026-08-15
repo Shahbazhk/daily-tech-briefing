@@ -4,29 +4,23 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import com.shahbaz.dailytechupdates.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), PlayerStateListener {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var player: ExoPlayer
-    private lateinit var downloadStore: DownloadStore
+    private lateinit var playerBarBinder: PlayerBarBinder
     private val repository = EpisodeRepository()
-    private var isPlaying = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        player = ExoPlayer.Builder(this).build()
-        downloadStore = DownloadStore(applicationContext)
-        downloadStore.purgeExpired()
+        PlayerManager.init(applicationContext)
+        playerBarBinder = PlayerBarBinder(binding.playerBar)
 
-        binding.playPauseButton.setOnClickListener { togglePlayback() }
         binding.statusText.setOnClickListener { loadTodayEpisode() }
         binding.historyButton.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
@@ -35,41 +29,53 @@ class MainActivity : AppCompatActivity() {
         loadTodayEpisode()
     }
 
+    override fun onStart() {
+        super.onStart()
+        PlayerManager.enterForeground()
+        PlayerManager.addListener(this)
+        playerBarBinder.start()
+    }
+
+    override fun onStop() {
+        playerBarBinder.stop()
+        PlayerManager.removeListener(this)
+        PlayerManager.leaveForeground()
+        super.onStop()
+    }
+
     private fun loadTodayEpisode() {
         binding.statusText.text = getString(R.string.loading_episode)
         lifecycleScope.launch {
-            val episode = try {
-                repository.getLatestEpisode()
+            val history = try {
+                repository.getEpisodeHistory(applicationContext)
             } catch (e: Exception) {
-                null
+                emptyList()
             }
-            if (episode == null || episode.audioUrl.isEmpty()) {
+            val today = history.firstOrNull()
+            if (today == null || today.audioUrl.isEmpty()) {
                 binding.statusText.text = getString(R.string.no_episode_yet)
                 return@launch
             }
-            binding.dateText.text = episode.date
-            binding.topicsText.text = episode.topicsCovered.joinToString(" • ")
             binding.statusText.text = getString(R.string.ready_to_play)
-            val uri = resolvePlaybackUri(episode.audioUrl, downloadStore.localPathFor(episode.date))
-            player.setMediaItem(MediaItem.fromUri(uri))
-            player.prepare()
+            // Only seed the queue on the very first load in this process - if PlayerManager
+            // already has something loaded (e.g. the user navigated here after using Next/
+            // Previous from History), don't reset playback back to today.
+            if (PlayerManager.currentEpisode() == null) {
+                PlayerManager.loadQueue(history, startIndex = 0, autoPlay = false)
+            }
         }
     }
 
-    private fun togglePlayback() {
-        isPlaying = !isPlaying
-        if (isPlaying) {
-            player.play()
-            binding.playPauseButton.text = getString(R.string.pause)
-        } else {
-            player.pause()
-            binding.playPauseButton.text = getString(R.string.play)
-        }
-    }
-
-    override fun onDestroy() {
-        player.release()
-        downloadStore.unregister()
-        super.onDestroy()
+    override fun onStateChanged(
+        episode: EpisodeSummary?,
+        isPlaying: Boolean,
+        positionMs: Long,
+        durationMs: Long,
+        hasNext: Boolean,
+        hasPrevious: Boolean
+    ) {
+        if (episode == null) return
+        binding.dateText.text = episode.date
+        binding.topicsText.text = episode.topicsCovered.joinToString(" • ")
     }
 }
