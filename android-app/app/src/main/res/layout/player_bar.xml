@@ -42,32 +42,42 @@
 
         <Button
             android:id="@+id/playerPreviousButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingHorizontal="0dp"
             android:text="@string/previous" />
 
         <Button
             android:id="@+id/playerSkipBackButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingHorizontal="0dp"
             android:text="@string/skip_backward_15" />
 
         <Button
             android:id="@+id/playerPlayPauseButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingHorizontal="0dp"
             android:text="@string/play" />
 
         <Button
             android:id="@+id/playerSkipForwardButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingHorizontal="0dp"
             android:text="@string/skip_forward_15" />
 
         <Button
             android:id="@+id/playerNextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingHorizontal="0dp"
             android:text="@string/next" />
 
     </LinearLayout>
