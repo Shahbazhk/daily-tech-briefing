@@ -7,7 +7,7 @@ PIPELINE_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PIPELINE_ROOT / "data"
 CONFIG_PATH = PIPELINE_ROOT / "config" / "sources.yaml"
 
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "openai/gpt-oss-120b"
 
 _LOGGING_CONFIGURED = False
 
