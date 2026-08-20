@@ -126,7 +126,11 @@ def check_segment_safety(text: str) -> tuple[bool, str]:
         {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
         {"role": "user", "content": text},
     ]
-    verdict = call_groq(messages, max_tokens=60)
+    # openai/gpt-oss-120b is a reasoning model: it spends tokens on hidden chain-of-thought
+    # before the final SAFE/FLAGGED line, so this needs far more headroom than a non-reasoning
+    # model would (60 was enough for llama-3.3-70b-versatile but truncates gpt-oss mid-thought,
+    # producing an empty verdict that reads as a false FLAGGED).
+    verdict = call_groq(messages, max_tokens=500)
     if verdict.strip().upper().startswith("SAFE"):
         return True, ""
     return False, verdict.strip()
