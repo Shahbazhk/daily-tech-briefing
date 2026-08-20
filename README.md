@@ -120,7 +120,7 @@ schedule.
 - **Kokoro voice name** (`af_heart`) in `pipeline/tts/synthesize.py` — see
   https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md for the full voice list if
   you want to swap it (e.g. for a male voice, try `am_michael`).
-- **Groq model id** (`llama-3.3-70b-versatile`) — Groq's free-tier model lineup changes over
+- **Groq model id** (`openai/gpt-oss-120b`) — Groq's free-tier model lineup changes over
   time; check https://console.groq.com/docs/models if `generate_script.py` starts 404ing, and
   override via the `GROQ_MODEL` env var without touching code.
 
