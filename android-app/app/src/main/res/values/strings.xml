@@ -5,6 +5,10 @@
     <string name="ready_to_play">Ready to play</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
+    <string name="previous">⏮</string>
+    <string name="skip_backward_15">-15s</string>
+    <string name="skip_forward_15">+15s</string>
+    <string name="next">⏭</string>
     <string name="notification_channel_name">Daily Episode</string>
     <string name="history">History</string>
     <string name="history_unavailable">History unavailable — check your connection.</string>
