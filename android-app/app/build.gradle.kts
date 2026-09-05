@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("kotlin-parcelize")
     // Re-add "com.google.gms.google-services" here (and its classpath in the root
     // build.gradle.kts) once Firebase is set up and app/google-services.json exists —
     // see EpisodeRepository's TODO. Left out for now so the app builds and installs
@@ -50,6 +51,7 @@ dependencies {
     // Podcast playback - Google's open-source Media3/ExoPlayer.
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
 
     implementation("androidx.recyclerview:recyclerview:1.3.2")
 
