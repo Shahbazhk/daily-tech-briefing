@@ -1,8 +1,13 @@
 package com.shahbaz.dailytechupdates
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.shahbaz.dailytechupdates.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
@@ -12,6 +17,8 @@ class MainActivity : AppCompatActivity(), PlayerStateListener {
     private lateinit var binding: ActivityMainBinding
     private lateinit var playerBarBinder: PlayerBarBinder
     private val repository = EpisodeRepository()
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op either way - audio still plays without the notification being visible */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +34,12 @@ class MainActivity : AppCompatActivity(), PlayerStateListener {
         }
 
         loadTodayEpisode()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     override fun onStart() {

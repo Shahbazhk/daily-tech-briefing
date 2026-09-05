@@ -65,19 +65,26 @@ interface PlayerStateListener {
 object PlayerManager {
 
     private var controller: MediaController? = null
+    private var connecting = false
+    private var pendingLoadQueue: Triple<List<EpisodeSummary>, Int, Boolean>? = null
     private val listeners = mutableListOf<PlayerStateListener>()
 
     private val positionHandler = Handler(Looper.getMainLooper())
     private var positionRunnable: Runnable? = null
 
     fun init(context: Context) {
-        if (controller != null) return
+        if (controller != null || connecting) return
+        connecting = true
         val appContext = context.applicationContext
         val sessionToken = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
         val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
         controllerFuture.addListener(
             {
                 controller = controllerFuture.get()
+                pendingLoadQueue?.let { (episodes, startIndex, autoPlay) ->
+                    sendLoadQueue(controller!!, episodes, startIndex, autoPlay)
+                }
+                pendingLoadQueue = null
                 controller?.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         if (isPlaying) startPositionUpdates() else stopPositionUpdates()
@@ -89,6 +96,14 @@ object PlayerManager {
                     }
 
                     override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                        notifyListeners()
+                    }
+
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int
+                    ) {
                         notifyListeners()
                     }
                 })
@@ -108,7 +123,15 @@ object PlayerManager {
      * responsible for the no-op-if-unchanged check (matching the old single-process check,
      * now done inside the service since that's where the state lives). */
     fun loadQueue(episodes: List<EpisodeSummary>, startIndex: Int, autoPlay: Boolean) {
-        val c = controller ?: return
+        val c = controller
+        if (c == null) {
+            pendingLoadQueue = Triple(episodes, startIndex, autoPlay)
+            return
+        }
+        sendLoadQueue(c, episodes, startIndex, autoPlay)
+    }
+
+    private fun sendLoadQueue(c: MediaController, episodes: List<EpisodeSummary>, startIndex: Int, autoPlay: Boolean) {
         val args = Bundle().apply {
             putParcelableArrayList(ARG_EPISODES, ArrayList(episodes))
             putInt(ARG_START_INDEX, startIndex)

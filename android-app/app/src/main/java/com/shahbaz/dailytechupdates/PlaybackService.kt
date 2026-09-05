@@ -7,6 +7,7 @@ import androidx.core.os.BundleCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -67,6 +68,18 @@ class PlaybackService : MediaLibraryService() {
 
         mediaLibrarySession = MediaLibrarySession.Builder(this, player, LibrarySessionCallback())
             .setSessionActivity(sessionActivity)
+            .setCustomLayout(
+                ImmutableList.of(
+                    CommandButton.Builder(CommandButton.ICON_PREVIOUS)
+                        .setSessionCommand(SessionCommand(COMMAND_PREVIOUS_EPISODE, Bundle.EMPTY))
+                        .setDisplayName("Previous episode")
+                        .build(),
+                    CommandButton.Builder(CommandButton.ICON_NEXT)
+                        .setSessionCommand(SessionCommand(COMMAND_NEXT_EPISODE, Bundle.EMPTY))
+                        .setDisplayName("Next episode")
+                        .build()
+                )
+            )
             .build()
 
         val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
@@ -174,8 +187,9 @@ class PlaybackService : MediaLibraryService() {
                 .setMediaId(ROOT_MEDIA_ID)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setIsBrowsable(false)
+                        .setIsBrowsable(true)
                         .setIsPlayable(false)
+                        .setMediaType(MediaMetadata.MEDIA_TYPE_FOLDER_MIXED)
                         .build()
                 )
                 .build()
