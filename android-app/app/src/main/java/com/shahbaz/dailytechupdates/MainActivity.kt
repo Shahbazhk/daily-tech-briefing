@@ -31,7 +31,6 @@ class MainActivity : AppCompatActivity(), PlayerStateListener {
 
     override fun onStart() {
         super.onStart()
-        PlayerManager.enterForeground()
         PlayerManager.addListener(this)
         playerBarBinder.start()
     }
@@ -39,7 +38,6 @@ class MainActivity : AppCompatActivity(), PlayerStateListener {
     override fun onStop() {
         playerBarBinder.stop()
         PlayerManager.removeListener(this)
-        PlayerManager.leaveForeground()
         super.onStop()
     }
 
