@@ -17,7 +17,13 @@ def call_groq(messages: list[dict], max_tokens: int = 1200) -> str:
 
     api_key = os.environ["GROQ_API_KEY"]
     model = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
-    client = Groq(api_key=api_key)
+    # The free tier's tokens-per-minute cap means 429s are routine mid-run (a single
+    # generate_script.py run makes ~15+ calls in well under a minute) - the SDK's default
+    # max_retries=2 (3 attempts) has proven too shallow, exhausting itself and aborting the
+    # whole episode while the account was still just seconds from having budget again. The
+    # SDK already does exponential backoff honoring Groq's Retry-After, so raising this alone
+    # (no custom retry loop needed) gives it enough attempts to wait out a shared-account burst.
+    client = Groq(api_key=api_key, max_retries=8)
 
     response = client.chat.completions.create(
         model=model,
