@@ -1,11 +1,16 @@
 package com.shahbaz.dailytechupdates
 
+import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
 
 /**
  * The queue is newest-first (index 0 = today). "Next" means chronologically newer
@@ -49,90 +54,115 @@ interface PlayerStateListener {
 }
 
 /**
- * App-lifetime singleton owning the one shared ExoPlayer instance, so playback survives
- * navigating between MainActivity and HistoryActivity instead of each owning its own player.
- * Deliberately NOT a background/foreground service: enterForeground()/leaveForeground() pause
- * playback once no activity of this app is visible, keeping playback strictly in-app (no
- * lock-screen/notification controls) rather than accidentally gaining background playback
- * just by virtue of the player no longer being tied to a single activity's lifecycle.
+ * App-side client for the shared PlaybackService: holds a MediaController instead of owning
+ * an ExoPlayer directly, so playback lives in a foreground service and survives the app
+ * backgrounding. MediaController implements the same Player interface ExoPlayer does, so this
+ * object's public functions are unchanged from before this refactor - only their internals
+ * swapped from calling the player directly to calling it through the controller. The queue
+ * and current-episode state now live in PlaybackService; this class only mirrors what the
+ * controller reports (via MediaMetadata.extras - see PlaybackService.playCurrent()).
  */
 object PlayerManager {
 
-    private lateinit var player: ExoPlayer
-    private lateinit var downloadStore: DownloadStore
-    private var initialized = false
-
-    private var queue: List<EpisodeSummary> = emptyList()
-    private var currentIndex: Int = -1
+    private var controller: MediaController? = null
+    private var connecting = false
+    private var pendingLoadQueue: Triple<List<EpisodeSummary>, Int, Boolean>? = null
     private val listeners = mutableListOf<PlayerStateListener>()
-
-    private var foregroundActivityCount = 0
 
     private val positionHandler = Handler(Looper.getMainLooper())
     private var positionRunnable: Runnable? = null
 
     fun init(context: Context) {
-        if (initialized) return
+        if (controller != null || connecting) return
+        connecting = true
         val appContext = context.applicationContext
-        player = ExoPlayer.Builder(appContext).build()
-        downloadStore = DownloadStore(appContext)
-        player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) startPositionUpdates() else stopPositionUpdates()
-                notifyListeners()
-            }
+        val sessionToken = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
+        val controllerFuture = MediaController.Builder(appContext, sessionToken).buildAsync()
+        controllerFuture.addListener(
+            {
+                controller = controllerFuture.get()
+                pendingLoadQueue?.let { (episodes, startIndex, autoPlay) ->
+                    sendLoadQueue(controller!!, episodes, startIndex, autoPlay)
+                }
+                pendingLoadQueue = null
+                controller?.addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        if (isPlaying) startPositionUpdates() else stopPositionUpdates()
+                        notifyListeners()
+                    }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        notifyListeners()
+                    }
+
+                    override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                        notifyListeners()
+                    }
+
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int
+                    ) {
+                        notifyListeners()
+                    }
+                })
                 notifyListeners()
-            }
-        })
-        initialized = true
+            },
+            MoreExecutors.directExecutor()
+        )
     }
 
-    fun currentEpisode(): EpisodeSummary? = queue.getOrNull(currentIndex)
+    fun currentEpisode(): EpisodeSummary? {
+        val c = controller ?: return null
+        if (c.currentMediaItem == null) return null
+        return episodeFromMetadata(c.mediaMetadata)
+    }
 
-    /** No-op if the same queue at the same index is already loaded, so reopening a screen
-     * mid-playback doesn't restart the current episode. */
+    /** Forwards the queue to PlaybackService, which owns the actual queue/index state and is
+     * responsible for the no-op-if-unchanged check (matching the old single-process check,
+     * now done inside the service since that's where the state lives). */
     fun loadQueue(episodes: List<EpisodeSummary>, startIndex: Int, autoPlay: Boolean) {
-        if (startIndex !in episodes.indices) return
-        if (queue == episodes && currentIndex == startIndex) return
-        queue = episodes
-        currentIndex = startIndex
-        playCurrent(autoPlay)
+        val c = controller
+        if (c == null) {
+            pendingLoadQueue = Triple(episodes, startIndex, autoPlay)
+            return
+        }
+        sendLoadQueue(c, episodes, startIndex, autoPlay)
     }
 
-    private fun playCurrent(autoPlay: Boolean) {
-        val episode = queue.getOrNull(currentIndex) ?: return
-        val uri = resolvePlaybackUri(episode.audioUrl, downloadStore.localPathFor(episode.date))
-        player.setMediaItem(MediaItem.fromUri(uri))
-        player.prepare()
-        if (autoPlay) player.play()
-        notifyListeners()
+    private fun sendLoadQueue(c: MediaController, episodes: List<EpisodeSummary>, startIndex: Int, autoPlay: Boolean) {
+        val args = Bundle().apply {
+            putParcelableArrayList(ARG_EPISODES, ArrayList(episodes))
+            putInt(ARG_START_INDEX, startIndex)
+            putBoolean(ARG_AUTO_PLAY, autoPlay)
+        }
+        c.sendCustomCommand(SessionCommand(COMMAND_LOAD_QUEUE, Bundle.EMPTY), args)
     }
 
     fun togglePlayPause() {
-        if (player.isPlaying) player.pause() else player.play()
+        val c = controller ?: return
+        if (c.isPlaying) c.pause() else c.play()
     }
 
     fun seekTo(positionMs: Long) {
-        player.seekTo(positionMs)
-        notifyListeners()
+        controller?.seekTo(positionMs)
     }
 
-    fun skipForward15() = seekTo(clampSeek(player.currentPosition, 15_000, player.duration))
+    fun skipForward15() {
+        controller?.seekForward()
+    }
 
-    fun skipBackward15() = seekTo(clampSeek(player.currentPosition, -15_000, player.duration))
+    fun skipBackward15() {
+        controller?.seekBack()
+    }
 
     fun next() {
-        val target = nextIndex(currentIndex, queue.size) ?: return
-        currentIndex = target
-        playCurrent(autoPlay = true)
+        controller?.sendCustomCommand(SessionCommand(COMMAND_NEXT_EPISODE, Bundle.EMPTY), Bundle.EMPTY)
     }
 
     fun previous() {
-        val target = previousIndex(currentIndex, queue.size) ?: return
-        currentIndex = target
-        playCurrent(autoPlay = true)
+        controller?.sendCustomCommand(SessionCommand(COMMAND_PREVIOUS_EPISODE, Bundle.EMPTY), Bundle.EMPTY)
     }
 
     fun addListener(listener: PlayerStateListener) {
@@ -142,21 +172,6 @@ object PlayerManager {
 
     fun removeListener(listener: PlayerStateListener) {
         listeners.remove(listener)
-    }
-
-    fun enterForeground() {
-        foregroundActivityCount++
-    }
-
-    /** Once the last visible activity of this app stops, pause playback - this is what keeps
-     * playback in-app-only now that the player is a singleton instead of tied to one activity's
-     * onDestroy(). Deliberately pause (not release): returning to the app should be able to
-     * resume from the same position, just not automatically. */
-    fun leaveForeground() {
-        foregroundActivityCount = (foregroundActivityCount - 1).coerceAtLeast(0)
-        if (foregroundActivityCount == 0) {
-            player.pause()
-        }
     }
 
     private fun startPositionUpdates() {
@@ -181,13 +196,29 @@ object PlayerManager {
     }
 
     private fun notifyListener(listener: PlayerStateListener) {
+        val c = controller
         listener.onStateChanged(
-            episode = queue.getOrNull(currentIndex),
-            isPlaying = if (initialized) player.isPlaying else false,
-            positionMs = if (initialized) player.currentPosition else 0L,
-            durationMs = if (initialized) player.duration else -1L,
-            hasNext = nextIndex(currentIndex, queue.size) != null,
-            hasPrevious = previousIndex(currentIndex, queue.size) != null
+            episode = if (c?.currentMediaItem != null) episodeFromMetadata(c.mediaMetadata) else null,
+            isPlaying = c?.isPlaying ?: false,
+            positionMs = c?.currentPosition ?: 0L,
+            durationMs = c?.duration ?: -1L,
+            hasNext = c?.mediaMetadata?.extras?.getBoolean(EXTRA_HAS_NEXT) ?: false,
+            hasPrevious = c?.mediaMetadata?.extras?.getBoolean(EXTRA_HAS_PREVIOUS) ?: false
+        )
+    }
+
+    /** Reconstructs just enough of an EpisodeSummary for display: date and topics, read back
+     * from the MediaMetadata PlaybackService.playCurrent() attaches to the current MediaItem.
+     * audioUrl/transcriptUrl are always "" here - neither MainActivity's nor PlayerBarBinder's
+     * onStateChanged reads them; they only ever mattered inside PlaybackService, for resolving
+     * the playback URI, which now happens entirely inside the service. */
+    private fun episodeFromMetadata(metadata: MediaMetadata): EpisodeSummary {
+        val topics = metadata.extras?.getStringArrayList(EXTRA_TOPICS)?.toList() ?: emptyList()
+        return EpisodeSummary(
+            date = metadata.title?.toString() ?: "",
+            topicsCovered = topics,
+            audioUrl = "",
+            transcriptUrl = ""
         )
     }
 }

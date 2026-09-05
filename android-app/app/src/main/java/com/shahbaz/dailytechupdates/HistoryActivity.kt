@@ -39,13 +39,11 @@ class HistoryActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        PlayerManager.enterForeground()
         playerBarBinder.start()
     }
 
     override fun onStop() {
         playerBarBinder.stop()
-        PlayerManager.leaveForeground()
         super.onStop()
     }
 
