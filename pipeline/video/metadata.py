@@ -82,7 +82,11 @@ def generate_metadata(date: str, topics: list[str], script: str) -> dict:
         {"role": "system", "content": METADATA_SYSTEM_PROMPT},
         {"role": "user", "content": build_metadata_prompt(date, topics, script)},
     ]
-    raw = call_groq(messages, max_tokens=500)
+    # openai/gpt-oss-120b is a reasoning model: it spends tokens on hidden chain-of-thought
+    # before the final JSON, so this needs far more headroom than a non-reasoning model would
+    # (500 was enough for llama-3.3-70b-versatile but truncates gpt-oss mid-thought, leaving an
+    # empty response that fails JSON parsing - see the same fix in generate_script.py).
+    raw = call_groq(messages, max_tokens=1200)
     try:
         data = _parse_json(raw)
     except json.JSONDecodeError:
@@ -91,7 +95,7 @@ def generate_metadata(date: str, topics: list[str], script: str) -> dict:
         messages.append(
             {"role": "user", "content": "That wasn't valid JSON. Respond with ONLY the JSON object, no other text."}
         )
-        raw = call_groq(messages, max_tokens=500)
+        raw = call_groq(messages, max_tokens=1200)
         data = _parse_json(raw)
 
     result = _normalize(data, date)
