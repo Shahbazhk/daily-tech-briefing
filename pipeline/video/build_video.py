@@ -15,11 +15,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, current_show, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("build_video")
 
-COVER_IMAGE = Path(__file__).resolve().parent / "assets" / "cover.png"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+
+def cover_image_path() -> Path:
+    return ASSETS_DIR / current_show()["cover_image"]
 
 
 def format_srt_timestamp(seconds: float) -> str:
@@ -58,7 +62,7 @@ def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
     cmd = [
         "ffmpeg", "-y",
         "-loop", "1",
-        "-i", str(COVER_IMAGE),
+        "-i", str(cover_image_path()),
         "-i", str(mp3_path),
         "-vf",
         f"subtitles='{srt_arg}':force_style="
@@ -79,20 +83,21 @@ def render_video(mp3_path: Path, srt_path: Path, out_path: Path) -> None:
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
-    mp3_path = data_dir / f"episode_{date}.mp3"
-    captions_path = data_dir / f"captions_{date}.json"
+    mp3_path = artifact_path("episode", "mp3", date)
+    captions_path = artifact_path("captions", "json", date)
     if not mp3_path.exists() or not captions_path.exists():
         raise SystemExit(f"Missing episode audio/captions for {date} — run tts/synthesize.py first.")
-    if not COVER_IMAGE.exists():
-        raise SystemExit(f"Missing {COVER_IMAGE} — run video/make_cover.py once and commit the result.")
+    cover_path = cover_image_path()
+    if not cover_path.exists():
+        raise SystemExit(f"Missing {cover_path} — run video/make_cover.py once and commit the result.")
 
     cues = json.loads(captions_path.read_text(encoding="utf-8"))
-    srt_path = data_dir / f"captions_{date}.srt"
+    srt_path = artifact_path("captions", "srt", date)
     srt_path.write_text(build_srt(cues), encoding="utf-8")
 
-    video_path = data_dir / f"video_{date}.mp4"
+    video_path = artifact_path("video", "mp4", date)
     render_video(mp3_path, srt_path, video_path)
     log.info("Wrote %s (%.1f MB)", video_path, video_path.stat().st_size / 1_000_000)
 
