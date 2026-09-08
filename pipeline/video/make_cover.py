@@ -9,11 +9,29 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+import argparse
+
 WIDTH, HEIGHT = 1920, 1080
-BG_TOP = (13, 16, 36)
-BG_BOTTOM = (26, 31, 58)
-ACCENT = (124, 156, 255)
-OUT_PATH = Path(__file__).resolve().parent / "assets" / "cover.png"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+COVERS = {
+    "tech": {
+        "bg_top": (13, 16, 36),
+        "bg_bottom": (26, 31, 58),
+        "accent": (124, 156, 255),
+        "title": "Daily Tech Briefing",
+        "subtitle": "Java - Spring Boot - Kubernetes - Cloud - and more",
+        "out_name": "cover.png",
+    },
+    "pm": {
+        "bg_top": (23, 21, 15),
+        "bg_bottom": (46, 40, 26),
+        "accent": (212, 175, 55),
+        "title": "Project Manager's Room",
+        "subtitle": "Agile - Delivery - Risk - Stakeholders - Leadership",
+        "out_name": "cover_pm.png",
+    },
+}
 
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
@@ -28,19 +46,22 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def build_cover() -> None:
-    img = Image.new("RGB", (WIDTH, HEIGHT), BG_TOP)
+def build_cover(show: str = "tech") -> None:
+    cfg = COVERS[show]
+    bg_top, bg_bottom, accent = cfg["bg_top"], cfg["bg_bottom"], cfg["accent"]
+
+    img = Image.new("RGB", (WIDTH, HEIGHT), bg_top)
     draw = ImageDraw.Draw(img)
     for y in range(HEIGHT):
         t = y / HEIGHT
-        color = tuple(int(BG_TOP[i] + (BG_BOTTOM[i] - BG_TOP[i]) * t) for i in range(3))
+        color = tuple(int(bg_top[i] + (bg_bottom[i] - bg_top[i]) * t) for i in range(3))
         draw.line([(0, y), (WIDTH, y)], fill=color)
 
     title_font = _load_font(96)
     subtitle_font = _load_font(40)
 
-    title = "Daily Tech Briefing"
-    subtitle = "Java - Spring Boot - Kubernetes - Cloud - and more"
+    title = cfg["title"]
+    subtitle = cfg["subtitle"]
 
     title_bbox = draw.textbbox((0, 0), title, font=title_font)
     title_w = title_bbox[2] - title_bbox[0]
@@ -48,12 +69,16 @@ def build_cover() -> None:
 
     subtitle_bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
     subtitle_w = subtitle_bbox[2] - subtitle_bbox[0]
-    draw.text(((WIDTH - subtitle_w) / 2, HEIGHT / 2 + 30), subtitle, font=subtitle_font, fill=ACCENT)
+    draw.text(((WIDTH - subtitle_w) / 2, HEIGHT / 2 + 30), subtitle, font=subtitle_font, fill=accent)
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    img.save(OUT_PATH)
-    print(f"Wrote {OUT_PATH}")
+    out_path = ASSETS_DIR / cfg["out_name"]
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path)
+    print(f"Wrote {out_path}")
 
 
 if __name__ == "__main__":
-    build_cover()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show", choices=list(COVERS), default="tech")
+    args = parser.parse_args()
+    build_cover(args.show)
