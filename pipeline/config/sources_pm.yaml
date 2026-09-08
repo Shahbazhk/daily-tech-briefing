@@ -1,0 +1,53 @@
+# Topic -> source config for "Project Manager's Room" (the PM/Delivery show).
+# Same shape as ../sources.yaml. RSS entries below are BEST-EFFORT and UNVERIFIED —
+# attempted verification during design (2026-09-08) was inconclusive (Agile Alliance
+# and Scrum.org didn't resolve to parseable feed XML via fetch; PMI blocked the fetch
+# with a 403, most likely bot-blocking rather than a real paywall). Confirm/replace
+# these URLs in a browser before the first real run. The collector skips a broken
+# feed silently (with a log line) rather than failing the whole run, same as sources.yaml.
+#
+# No PMI login/credentials are used here or anywhere in this pipeline (see design spec
+# for why) — the PMI blog entry below is the public blog only.
+
+topics:
+  agile_delivery:
+    label: "Agile & Scrum Delivery"
+    rss: []
+    reddit_subs: ["agile", "scrum"]
+    hn_query: "agile delivery"
+
+  risk_stakeholder:
+    label: "Risk & Stakeholder Management"
+    rss: []
+    reddit_subs: ["projectmanagement"]
+    hn_query: "project risk management"
+
+  pmi_pmbok:
+    label: "PMI & PMBOK News"
+    description: >
+      News from the Project Management Institute and PMBOK-related certification/standards
+      updates. Source is PMI's public blog (not member-gated content) - see note above.
+    rss:
+      - https://www.pmi.org/blog/rss  # UNVERIFIED - confirm before relying on it
+    reddit_subs: ["pmp"]
+    hn_query: "PMI project management"
+
+  hybrid_remote_delivery:
+    label: "Hybrid & Remote Team Delivery"
+    rss: []
+    reddit_subs: ["projectmanagement", "agile"]
+    hn_query: "remote team delivery"
+
+  pm_tooling:
+    label: "PM Tooling (Jira, MS Project, Azure DevOps)"
+    rss:
+      - https://www.agilealliance.org/feed/  # UNVERIFIED - confirm before relying on it
+      - https://www.scrum.org/resources/blog/rss  # UNVERIFIED - confirm before relying on it
+    reddit_subs: ["projectmanagement"]
+    hn_query: "project management tools"
+
+# Collection window, in hours, applied uniformly to all sources above.
+lookback_hours: 24
+
+# Cap on raw items collected per topic before ranking/summarization.
+max_items_per_topic: 8
