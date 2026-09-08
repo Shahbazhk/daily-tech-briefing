@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, current_show, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("publish")
 
@@ -55,7 +55,7 @@ def upload_audio(mp3_path: Path, date: str) -> str:
     from firebase_admin import storage
 
     bucket = storage.bucket()
-    blob_path = f"episodes/episode_{date}.mp3"
+    blob_path = f"{current_show()['storage_prefix']}/{mp3_path.name}"
     blob = bucket.blob(blob_path)
 
     token = str(uuid.uuid4())
@@ -72,7 +72,7 @@ def write_episode_doc(date: str, audio_url: str, transcript: dict) -> None:
     from firebase_admin import firestore
 
     db = firestore.client()
-    db.collection("episodes").document(date).set(
+    db.collection(current_show()["firestore_collection"]).document(date).set(
         {
             "date": date,
             "audio_url": audio_url,
@@ -87,11 +87,12 @@ def write_episode_doc(date: str, audio_url: str, transcript: dict) -> None:
 def send_notification(date: str, audio_url: str, topics: list[str]) -> None:
     from firebase_admin import messaging
 
-    topics_preview = ", ".join(topics[:4]) if topics else "today's tech world"
+    show = current_show()
+    topics_preview = ", ".join(topics[:4]) if topics else "today's update"
     message = messaging.Message(
-        topic="daily_episode",
+        topic=show["push_topic"],
         notification=messaging.Notification(
-            title="Your daily tech briefing is ready",
+            title=f"Your {show['show_label']} is ready",
             body=f"Covering: {topics_preview}",
         ),
         data={"date": date, "audio_url": audio_url},
@@ -100,10 +101,10 @@ def send_notification(date: str, audio_url: str, topics: list[str]) -> None:
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
-    mp3_path = data_dir / f"episode_{date}.mp3"
-    transcript_path = data_dir / f"transcript_{date}.json"
+    mp3_path = artifact_path("episode", "mp3", date)
+    transcript_path = artifact_path("transcript", "json", date)
 
     if not mp3_path.exists() or not transcript_path.exists():
         raise SystemExit(f"Missing episode artifacts for {date} — run the earlier pipeline steps first.")
