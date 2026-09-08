@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, current_show, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("thumbnail")
 
@@ -54,7 +54,7 @@ def topic_accent_color(topic_label: str) -> tuple[int, int, int]:
     return TOPIC_ACCENT_COLORS.get(topic_label, DEFAULT_ACCENT)
 
 
-def generate_thumbnail(date: str, topics: list[str], out_path: Path) -> None:
+def generate_thumbnail(date: str, topics: list[str], out_path: Path, show_label: str = "Daily Tech Briefing") -> None:
     accent = topic_accent_color(topics[0]) if topics else DEFAULT_ACCENT
     bg = tuple(max(0, c - 180) for c in accent)
 
@@ -67,7 +67,7 @@ def generate_thumbnail(date: str, topics: list[str], out_path: Path) -> None:
 
     draw.text((60, 50), date, font=date_font, fill=(255, 255, 255))
 
-    topics_text = " - ".join(topics[:3]) if topics else "Daily Tech Briefing"
+    topics_text = " - ".join(topics[:3]) if topics else show_label
     draw.text((60, HEIGHT - 180), topics_text, font=topics_font, fill=(20, 20, 20))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,17 +75,17 @@ def generate_thumbnail(date: str, topics: list[str], out_path: Path) -> None:
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
-    transcript_path = data_dir / f"transcript_{date}.json"
+    transcript_path = artifact_path("transcript", "json", date)
     if not transcript_path.exists():
         raise SystemExit(f"Missing {transcript_path} — run scripting/generate_script.py first.")
 
     transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
     topics = [t["topic"] for t in transcript["topics_covered"]]
 
-    out_path = data_dir / f"thumbnail_{date}.png"
-    generate_thumbnail(date, topics, out_path)
+    out_path = artifact_path("thumbnail", "png", date)
+    generate_thumbnail(date, topics, out_path, show_label=current_show()["show_label"])
     log.info("Wrote %s", out_path)
 
 
