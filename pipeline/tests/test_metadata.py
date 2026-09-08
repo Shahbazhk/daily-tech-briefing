@@ -65,3 +65,10 @@ def test_generate_metadata_caps_total_tags_length_under_500_chars():
     with patch("metadata.call_groq", return_value=fake_json):
         result = metadata.generate_metadata("2026-08-03", ["Java"], "script")
     assert sum(len(t) + 1 for t in result["tags"]) <= metadata.MAX_TAGS_CHARS
+
+
+def test_generate_metadata_uses_show_label_in_default_title():
+    fake_json = '{"description": "D", "tags": []}'
+    with patch("metadata.call_groq", return_value=fake_json):
+        result = metadata.generate_metadata("2026-09-08", ["Agile"], "script", show_label="Project Manager's Room")
+    assert result["title"] == "Project Manager's Room — 2026-09-08"
