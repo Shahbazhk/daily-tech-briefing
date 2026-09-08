@@ -1,0 +1,61 @@
+name: Project Manager's Room
+
+
+on:
+  schedule:
+    # 09:00 UTC ~= 12:00 PM AST - several hours after the tech show's 00:00 UTC run,
+    # landing as a distinct midday touchpoint and avoiding scheduler/Groq-rate-limit
+    # contention between the two jobs (see design spec's Workflow section).
+    - cron: "0 9 * * *"
+  workflow_dispatch: {} # allows manual "Run workflow" for testing
+
+permissions:
+  contents: write # needed only for the GitHub Release fallback step
+
+jobs:
+  build-pm-episode:
+    runs-on: ubuntu-latest
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GH_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+      REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_STORAGE_BUCKET: ${{ secrets.FIREBASE_STORAGE_BUCKET }}
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      YOUTUBE_PM_PLAYLIST_ID: ${{ secrets.YOUTUBE_PM_PLAYLIST_ID }}
+      KOKORO_VOICE: am_michael
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (ffmpeg for WAV -> MP3, espeak-ng for Kokoro's phonemizer, fonts for captions/thumbnail)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core
+
+      - name: Install PyTorch (CPU-only build - the default PyPI wheel pulls in unused CUDA libs)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Python deps
+        run: pip install -r pipeline/requirements.txt
+
+      - name: Run pipeline for the PM show (collect -> script -> TTS -> build_video -> publish -> youtube_publish)
+        run: python pipeline/run_pipeline.py --show pm
+
+      - name: Fallback - attach episode to a GitHub Release (only if Firebase isn't configured)
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date -u +%F)
+          gh release delete "episode-pm-$DATE" --yes 2>/dev/null || true
+          gh release create "episode-pm-$DATE" \
+            pipeline/data/episode_pm_*.mp3 \
+            pipeline/data/transcript_pm_*.json \
+            --title "Project Manager's Room - $DATE" \
+            --notes "Automated PM/Delivery episode. Firebase publish was not configured, so the app should poll this release."
