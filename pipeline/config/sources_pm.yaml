@@ -1,18 +1,20 @@
 # Topic -> source config for "Project Manager's Room" (the PM/Delivery show).
-# Same shape as ../sources.yaml. RSS entries below are BEST-EFFORT and UNVERIFIED —
-# attempted verification during design (2026-09-08) was inconclusive (Agile Alliance
-# and Scrum.org didn't resolve to parseable feed XML via fetch; PMI blocked the fetch
-# with a 403, most likely bot-blocking rather than a real paywall). Confirm/replace
-# these URLs in a browser before the first real run. The collector skips a broken
-# feed silently (with a log line) rather than failing the whole run, same as sources.yaml.
+# Same shape as ../sources.yaml. RSS entries below were verified by fetching each URL
+# directly and confirming it returns real, current <item> entries (not just valid-looking
+# XML) - see docs/superpowers/specs/2026-09-08-pm-delivery-show-design.md for the ones that
+# didn't make it: agilealliance.org has no RSS feed at all (newsletter only), scrum.org's
+# blog RSS URL returns nothing, and pmi.org blocks automated fetches with a 403. Those three
+# were dropped rather than left in as broken URLs (2026-09-08 re-check). The collector skips
+# a broken feed silently (with a log line) rather than failing the whole run either way.
 #
 # No PMI login/credentials are used here or anywhere in this pipeline (see design spec
-# for why) — the PMI blog entry below is the public blog only.
+# for why) - RSS feeds only, same as every other source in this file.
 
 topics:
   agile_delivery:
     label: "Agile & Scrum Delivery"
-    rss: []
+    rss:
+      - https://rebelsguidetopm.com/feed/
     reddit_subs: ["agile", "scrum"]
     hn_query: "agile delivery"
 
@@ -26,9 +28,8 @@ topics:
     label: "PMI & PMBOK News"
     description: >
       News from the Project Management Institute and PMBOK-related certification/standards
-      updates. Source is PMI's public blog (not member-gated content) - see note above.
-    rss:
-      - https://www.pmi.org/blog/rss  # UNVERIFIED - confirm before relying on it
+      updates.
+    rss: []
     reddit_subs: ["pmp"]
     hn_query: "PMI project management"
 
@@ -41,8 +42,7 @@ topics:
   pm_tooling:
     label: "PM Tooling (Jira, MS Project, Azure DevOps)"
     rss:
-      - https://www.agilealliance.org/feed/  # UNVERIFIED - confirm before relying on it
-      - https://www.scrum.org/resources/blog/rss  # UNVERIFIED - confirm before relying on it
+      - https://www.projectmanager.com/blog/feed
     reddit_subs: ["projectmanagement"]
     hn_query: "project management tools"
 
