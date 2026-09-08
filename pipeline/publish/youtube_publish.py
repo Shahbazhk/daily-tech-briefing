@@ -15,14 +15,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, current_show, ensure_data_dir, episode_date, get_logger  # noqa: E402
 from video.metadata import generate_metadata  # noqa: E402
 from video.thumbnail import generate_thumbnail  # noqa: E402
 
 log = get_logger("youtube_publish")
 
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
-CATEGORY_SCIENCE_AND_TECHNOLOGY = "28"
 
 
 class YouTubeAuthError(Exception):
@@ -32,7 +31,12 @@ class YouTubeAuthError(Exception):
 def youtube_configured() -> bool:
     return all(
         os.environ.get(var)
-        for var in ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN", "YOUTUBE_PLAYLIST_ID")
+        for var in (
+            "YOUTUBE_CLIENT_ID",
+            "YOUTUBE_CLIENT_SECRET",
+            "YOUTUBE_REFRESH_TOKEN",
+            current_show()["youtube_playlist_env"],
+        )
     )
 
 
@@ -92,7 +96,7 @@ def upload_video(youtube, video_path: Path, metadata: dict, date: str) -> str:
             "title": metadata["title"],
             "description": f"{metadata['description']}\n\n{_episode_date_marker(date)}",
             "tags": metadata["tags"],
-            "categoryId": CATEGORY_SCIENCE_AND_TECHNOLOGY,
+            "categoryId": current_show()["youtube_category_id"],
         },
         "status": {
             "privacyStatus": "public",
@@ -132,23 +136,25 @@ def add_to_playlist(youtube, playlist_id: str, video_id: str) -> None:
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
+    show = current_show()
 
     if not youtube_configured():
         log.warning(
-            "YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN/PLAYLIST_ID not fully set - skipping YouTube publish."
+            "YOUTUBE_CLIENT_ID/SECRET/REFRESH_TOKEN/%s not fully set - skipping YouTube publish.",
+            show["youtube_playlist_env"],
         )
         return
 
-    video_path = data_dir / f"video_{date}.mp4"
-    transcript_path = data_dir / f"transcript_{date}.json"
+    video_path = artifact_path("video", "mp4", date)
+    transcript_path = artifact_path("transcript", "json", date)
     if not video_path.exists() or not transcript_path.exists():
         raise SystemExit(f"Missing video/transcript for {date} — run video/build_video.py first.")
 
     transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
     topics = [t["topic"] for t in transcript["topics_covered"]]
-    playlist_id = os.environ["YOUTUBE_PLAYLIST_ID"]
+    playlist_id = os.environ[show["youtube_playlist_env"]]
 
     try:
         youtube = build_youtube_client()
@@ -165,11 +171,11 @@ def main() -> None:
         log.info("A video for %s is already in the playlist - skipping (idempotent re-run).", date)
         return
 
-    thumbnail_path = data_dir / f"thumbnail_{date}.png"
-    generate_thumbnail(date, topics, thumbnail_path)
+    thumbnail_path = artifact_path("thumbnail", "png", date)
+    generate_thumbnail(date, topics, thumbnail_path, show_label=show["show_label"])
 
-    result = generate_metadata(date, topics, transcript["script"])
-    (data_dir / f"youtube_metadata_{date}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    result = generate_metadata(date, topics, transcript["script"], show_label=show["show_label"])
+    artifact_path("youtube_metadata", "json", date).write_text(json.dumps(result, indent=2), encoding="utf-8")
 
     log.info("Uploading %s to YouTube...", video_path.name)
     video_id = upload_video(youtube, video_path, result, date)

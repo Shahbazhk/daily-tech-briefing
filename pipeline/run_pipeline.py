@@ -6,16 +6,18 @@ Usage:
   python run_pipeline.py                 # run all stages
   python run_pipeline.py --skip-publish  # everything except the Firebase/YouTube publish stages
                                           # (handy for local testing without those creds)
+  python run_pipeline.py --show {tech,pm}  # which show to run (default: tech)
 """
 
 import argparse
+import os
 import runpy
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import get_logger  # noqa: E402
+from common import SHOWS, get_logger  # noqa: E402
 
 log = get_logger("pipeline")
 
@@ -48,11 +50,15 @@ def run_stage(name: str, module_path: str, required: bool = True) -> bool:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-publish", action="store_true", help="Skip the Firebase/YouTube publish stages")
+    parser.add_argument("--show", choices=list(SHOWS), default="tech", help="Which show to run (default: tech)")
     args = parser.parse_args()
+
+    os.environ["PIPELINE_SHOW"] = args.show
+    script_module_file = SHOWS[args.show]["script_module"].split(".")[-1] + ".py"
 
     root = Path(__file__).resolve().parent
     run_stage("collect", str(root / "collector" / "collect.py"))
-    run_stage("generate_script", str(root / "scripting" / "generate_script.py"))
+    run_stage("generate_script", str(root / "scripting" / script_module_file))
     run_stage("synthesize", str(root / "tts" / "synthesize.py"))
     run_stage("build_video", str(root / "video" / "build_video.py"), required=False)
     if not args.skip_publish:

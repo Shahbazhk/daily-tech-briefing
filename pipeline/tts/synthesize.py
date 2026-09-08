@@ -24,7 +24,7 @@ import numpy as np
 import soundfile as sf
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("tts")
 
@@ -81,9 +81,9 @@ def convert_to_mp3(wav_path: Path, mp3_path: Path) -> None:
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
-    script_path = data_dir / f"script_{date}.md"
+    script_path = artifact_path("script", "md", date)
     if not script_path.exists():
         raise SystemExit(f"Missing {script_path} — run scripting/generate_script.py first.")
 
@@ -91,9 +91,9 @@ def main() -> None:
     lang_code = os.environ.get("KOKORO_LANG_CODE", DEFAULT_LANG_CODE)
     voice = os.environ.get("KOKORO_VOICE", DEFAULT_VOICE)
 
-    wav_path = data_dir / f"episode_{date}.wav"
-    mp3_path = data_dir / f"episode_{date}.mp3"
-    captions_path = data_dir / f"captions_{date}.json"
+    wav_path = artifact_path("episode", "wav", date)
+    mp3_path = artifact_path("episode", "mp3", date)
+    captions_path = artifact_path("captions", "json", date)
 
     run_kokoro(text, lang_code, voice, wav_path, captions_path)
     convert_to_mp3(wav_path, mp3_path)

@@ -54,3 +54,95 @@ def episode_date() -> str:
 def ensure_data_dir() -> Path:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     return DATA_DIR
+
+
+SHOWS: dict[str, dict] = {
+    "tech": {
+        "sources_path": CONFIG_PATH,
+        "suffix": "",
+        "show_label": "Daily Tech Briefing",
+        "cover_image": "cover.png",
+        "script_module": "scripting.generate_script",
+        "firestore_collection": "episodes",
+        "storage_prefix": "episodes",
+        "push_topic": "daily_episode",
+        "youtube_playlist_env": "YOUTUBE_PLAYLIST_ID",
+        "youtube_category_id": "28",  # Science & Technology
+    },
+    "pm": {
+        "sources_path": PIPELINE_ROOT / "config" / "sources_pm.yaml",
+        "suffix": "_pm",
+        "show_label": "Project Manager's Room",
+        "cover_image": "cover_pm.png",
+        "script_module": "scripting.generate_script_pm",
+        "firestore_collection": "episodes_pm",
+        "storage_prefix": "episodes_pm",
+        "push_topic": "daily_pm_episode",
+        "youtube_playlist_env": "YOUTUBE_PM_PLAYLIST_ID",
+        "youtube_category_id": "27",  # Education
+    },
+}
+
+
+def current_show() -> dict:
+    """Resolves the active show from the PIPELINE_SHOW env var (set by
+    run_pipeline.py's --show flag), defaulting to "tech" so every existing
+    call site and workflow keeps working unchanged."""
+    return SHOWS[os.environ.get("PIPELINE_SHOW", "tech")]
+
+
+def artifact_path(kind: str, ext: str, date: str) -> Path:
+    """e.g. artifact_path("episode", "mp3", "2026-09-08") ->
+    data/episode_2026-09-08.mp3 for the tech show (unsuffixed - matches every
+    already-published filename) or data/episode_pm_2026-09-08.mp3 for pm."""
+    suffix = current_show()["suffix"]
+    return DATA_DIR / f"{kind}{suffix}_{date}.{ext}"
+
+
+SAFETY_SYSTEM_PROMPT = """You are a content safety reviewer for a podcast script segment. Read
+the segment text and decide if it violates either rule:
+1. Contains vulgarity, profanity, or sexual content.
+2. Presents an unethical use-case, project, or example (e.g. surveillance abuse, exploit/attack
+   tooling meant to cause harm, discriminatory or privacy-violating systems) as something to
+   emulate or admire, rather than something to avoid or merely report as news.
+
+Respond with exactly one line: either "SAFE" or "FLAGGED: <one-sentence reason>". No other text.
+"""
+
+
+class ContentSafetyError(Exception):
+    def __init__(self, segment_label: str, reason: str):
+        self.segment_label = segment_label
+        self.reason = reason
+        super().__init__(f"{segment_label} segment failed content safety check: {reason}")
+
+
+def check_segment_safety(text: str) -> tuple[bool, str]:
+    messages = [
+        {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
+        {"role": "user", "content": text},
+    ]
+    # openai/gpt-oss-120b is a reasoning model: it spends tokens on hidden chain-of-thought
+    # before the final SAFE/FLAGGED line, so this needs far more headroom than a non-reasoning
+    # model would (60 was enough for llama-3.3-70b-versatile but truncates gpt-oss mid-thought,
+    # producing an empty verdict that reads as a false FLAGGED).
+    verdict = call_groq(messages, max_tokens=500)
+    if verdict.strip().upper().startswith("SAFE"):
+        return True, ""
+    return False, verdict.strip()
+
+
+def retry_with_safety_reminder(messages: list[dict], segment: str, reason: str, max_tokens: int) -> str:
+    messages.append({"role": "assistant", "content": segment})
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"That segment was flagged by a content safety review: {reason}. Rewrite it so it "
+                f"fully avoids vulgarity and does not present any unethical use-case, project, or "
+                f"example as something to emulate, while still covering the same underlying news "
+                f"items."
+            ),
+        }
+    )
+    return call_groq(messages, max_tokens=max_tokens)

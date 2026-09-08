@@ -87,6 +87,9 @@ cp ../.env.example ../.env   # fill in values, then export them into your shell,
 python run_pipeline.py --skip-publish   # collect + write script + synthesize audio only
 ```
 
+Add `--show pm` to run the Project Manager's Room show instead (default is `tech`) — see
+"Project Manager's Room (second show)" below.
+
 ffmpeg and espeak-ng aren't in `requirements.txt` (they're system packages, see the workflow
 steps that `apt-get install` them) — for local runs on Linux/macOS, install both with your
 package manager once, same as CI does. `torch` is also installed separately as a CPU-only
@@ -103,6 +106,28 @@ Already wired up in `.github/workflows/daily-episode.yml` — cron-scheduled for
 trigger is best-effort and can be delayed by hours under load). You can also trigger it
 manually from the **Actions** tab (**Run workflow**) to test end-to-end before relying on the
 schedule.
+
+## Project Manager's Room (second show)
+
+A second daily show for IT project/delivery managers, sharing this same pipeline: run it with
+`python run_pipeline.py --show pm`. It has its own workflow,
+`.github/workflows/daily-pm-episode.yml` — currently `workflow_dispatch`-only (manual trigger),
+with its `schedule:` trigger intentionally commented out. That's because the Android app's
+release-tag filtering isn't yet show-aware, so an autonomous PM release would hijack the tech
+show's "latest episode" on the live app; see the comment in that workflow file and
+`docs/superpowers/specs/2026-09-08-pm-delivery-show-design.md` for the full story and what needs
+to change before re-enabling it.
+
+It reuses every secret the tech show uses, plus one more: `YOUTUBE_PM_PLAYLIST_ID` (a playlist
+ID on the same YouTube channel/OAuth client as the tech show — no separate Google Cloud setup
+needed). It also runs with a different Kokoro voice (`KOKORO_VOICE=am_michael`), set directly in
+the workflow's `env:` block, so no code or secret change is needed for that.
+
+The 3 RSS feed URLs in `pipeline/config/sources_pm.yaml` are unverified placeholders — confirm
+or replace them before relying on this show's news coverage.
+
+See `docs/superpowers/specs/2026-09-08-pm-delivery-show-design.md` for the full design
+rationale.
 
 ## Opening the Android app
 

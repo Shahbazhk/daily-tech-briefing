@@ -27,7 +27,7 @@ import yaml
 from dateutil import parser as dateparser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import CONFIG_PATH, episode_date, ensure_data_dir, get_logger  # noqa: E402
+from common import artifact_path, current_show, episode_date, ensure_data_dir, get_logger  # noqa: E402
 
 log = get_logger("collector")
 
@@ -36,7 +36,7 @@ HN_ALGOLIA_API = "https://hn.algolia.com/api/v1/search_by_date"
 
 
 def load_config() -> dict:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    with open(current_show()["sources_path"], "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -240,8 +240,8 @@ def main() -> None:
         }
         log.info("  -> %d items", len(arch_items))
 
-    out_dir = ensure_data_dir()
-    out_path = out_dir / f"collected_{result['date']}.json"
+    ensure_data_dir()
+    out_path = artifact_path("collected", "json", result["date"])
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2)
     log.info("Wrote %s", out_path)

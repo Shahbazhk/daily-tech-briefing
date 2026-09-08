@@ -36,7 +36,15 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import call_groq, ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import (  # noqa: E402
+    ContentSafetyError,
+    call_groq,
+    check_segment_safety,
+    ensure_data_dir,
+    episode_date,
+    get_logger,
+    retry_with_safety_reminder,
+)
 
 log = get_logger("scripting")
 
@@ -103,55 +111,6 @@ Rules:
   it rather than covering it.
 """
 
-SAFETY_SYSTEM_PROMPT = """You are a content safety reviewer for a technology podcast script
-segment. Read the segment text and decide if it violates either rule:
-1. Contains vulgarity, profanity, or sexual content.
-2. Presents an unethical use-case, project, or example (e.g. surveillance abuse, exploit/attack
-   tooling meant to cause harm, discriminatory or privacy-violating systems) as something to
-   emulate or admire, rather than something to avoid or merely report as news.
-
-Respond with exactly one line: either "SAFE" or "FLAGGED: <one-sentence reason>". No other text.
-"""
-
-
-class ContentSafetyError(Exception):
-    def __init__(self, segment_label: str, reason: str):
-        self.segment_label = segment_label
-        self.reason = reason
-        super().__init__(f"{segment_label} segment failed content safety check: {reason}")
-
-
-def check_segment_safety(text: str) -> tuple[bool, str]:
-    messages = [
-        {"role": "system", "content": SAFETY_SYSTEM_PROMPT},
-        {"role": "user", "content": text},
-    ]
-    # openai/gpt-oss-120b is a reasoning model: it spends tokens on hidden chain-of-thought
-    # before the final SAFE/FLAGGED line, so this needs far more headroom than a non-reasoning
-    # model would (60 was enough for llama-3.3-70b-versatile but truncates gpt-oss mid-thought,
-    # producing an empty verdict that reads as a false FLAGGED).
-    verdict = call_groq(messages, max_tokens=500)
-    if verdict.strip().upper().startswith("SAFE"):
-        return True, ""
-    return False, verdict.strip()
-
-
-def _retry_with_safety_reminder(messages: list[dict], segment: str, reason: str, max_tokens: int) -> str:
-    messages.append({"role": "assistant", "content": segment})
-    messages.append(
-        {
-            "role": "user",
-            "content": (
-                f"That segment was flagged by a content safety review: {reason}. Rewrite it so it "
-                f"fully avoids vulgarity and does not present any unethical use-case, project, or "
-                f"example as something to emulate, while still covering the same underlying news "
-                f"items."
-            ),
-        }
-    )
-    return call_groq(messages, max_tokens=max_tokens)
-
-
 INTRO_TEMPLATE = (
     "Good morning. Here's your daily tech briefing for {date}. "
     "Today we're covering {topics}. Let's get into it."
@@ -217,7 +176,7 @@ def generate_topic_segment(topic_label: str, items: list[dict], target_words: in
     is_safe, reason = check_segment_safety(segment)
     if not is_safe:
         log.warning("%s segment flagged by safety check (%s) - retrying once...", topic_label, reason)
-        segment = _retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1600, target_words * 3))
+        segment = retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1600, target_words * 3))
         is_safe, reason = check_segment_safety(segment)
         if not is_safe:
             raise ContentSafetyError(topic_label, reason)
@@ -255,7 +214,7 @@ def generate_architecture_segment(items: list[dict], target_words: int, descript
     is_safe, reason = check_segment_safety(segment)
     if not is_safe:
         log.warning("Architect's Corner flagged by safety check (%s) - retrying once...", reason)
-        segment = _retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1800, target_words * 3))
+        segment = retry_with_safety_reminder(messages, segment, reason, max_tokens=min(1800, target_words * 3))
         is_safe, reason = check_segment_safety(segment)
         if not is_safe:
             raise ContentSafetyError("The Architect's Corner", reason)
@@ -263,16 +222,23 @@ def generate_architecture_segment(items: list[dict], target_words: int, descript
     return segment
 
 
-def allocate_word_budgets(topics_with_items: list[tuple[str, list[dict]]]) -> dict[str, int]:
-    """Splits TOPIC_TARGET_WORDS across topics proportionally to how many items
-    each one has, so a topic with more news gets more airtime, within a
-    [MIN_SEGMENT_WORDS, MAX_SEGMENT_WORDS] band per topic."""
+def allocate_word_budgets(
+    topics_with_items: list[tuple[str, list[dict]]],
+    target_words: int = TOPIC_TARGET_WORDS,
+    min_words: int = MIN_SEGMENT_WORDS,
+    max_words: int = MAX_SEGMENT_WORDS,
+) -> dict[str, int]:
+    """Splits `target_words` across topics proportionally to how many items each
+    one has, so a topic with more news gets more airtime, within a
+    [min_words, max_words] band per topic. Defaults match this show's own
+    TOPIC_TARGET_WORDS/MIN_SEGMENT_WORDS/MAX_SEGMENT_WORDS; generate_script_pm.py
+    (Task 12) passes its own smaller targets."""
     total_items = sum(len(items) for _, items in topics_with_items) or 1
     budgets = {}
     for label, items in topics_with_items:
         share = len(items) / total_items
-        budget = round(TOPIC_TARGET_WORDS * share)
-        budgets[label] = max(MIN_SEGMENT_WORDS, min(MAX_SEGMENT_WORDS, budget))
+        budget = round(target_words * share)
+        budgets[label] = max(min_words, min(max_words, budget))
     return budgets
 
 
