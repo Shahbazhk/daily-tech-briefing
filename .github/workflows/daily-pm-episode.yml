@@ -2,12 +2,22 @@ name: Project Manager's Room
 
 
 on:
-  schedule:
-    # 09:00 UTC ~= 12:00 PM AST - several hours after the tech show's 00:00 UTC run,
-    # landing as a distinct midday touchpoint and avoiding scheduler/Groq-rate-limit
-    # contention between the two jobs (see design spec's Workflow section).
-    - cron: "0 9 * * *"
-  workflow_dispatch: {} # allows manual "Run workflow" for testing
+  # schedule intentionally disabled for now: EpisodeRepository.kt's GitHub-Release
+  # tag filter (`startsWith("episode-")`) is not yet exact-date-scoped, so a real
+  # "episode-pm-YYYY-MM-DD" release would sort ahead of every tech "episode-YYYY-MM-DD"
+  # release (string comparison: 'p' > any digit) and hijack the live Android app's
+  # "latest episode" permanently. Re-enable the schedule below once EpisodeRepository.kt
+  # is updated to filter tech vs. PM releases by an exact-date regex per show (see design
+  # spec's "Required fix: Android release-tag filtering" section) — that work is
+  # deliberately out of scope for this branch.
+  #
+  # schedule:
+  #   # 09:00 UTC ~= 12:00 PM AST - several hours after the tech show's 00:00 UTC run,
+  #   # landing as a distinct midday touchpoint and avoiding scheduler/Groq-rate-limit
+  #   # contention between the two jobs (see design spec's Workflow section).
+  #   - cron: "0 9 * * *"
+  workflow_dispatch: {} # allows manual "Run workflow" for testing — safe, does not
+                        # autonomously create a release the Android app would pick up
 
 permissions:
   contents: write # needed only for the GitHub Release fallback step
