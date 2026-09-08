@@ -6,6 +6,7 @@ Usage:
   python run_pipeline.py                 # run all stages
   python run_pipeline.py --skip-publish  # everything except the Firebase/YouTube publish stages
                                           # (handy for local testing without those creds)
+  python run_pipeline.py --show {tech,pm}  # which show to run (default: tech)
 """
 
 import argparse

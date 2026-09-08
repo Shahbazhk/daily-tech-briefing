@@ -3,7 +3,8 @@ Generates the YouTube title/description/tags for today's episode via one
 additional Groq call (same free API already used for the script), fed the
 already safety-approved script + topic list - see design spec Section 3.4:
 no separate safety check needed here since the source script has already
-passed the guardrail in scripting/generate_script.py.
+passed the guardrail in scripting/generate_script.py (tech show) or
+scripting/generate_script_pm.py (PM show).
 """
 
 import json

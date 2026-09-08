@@ -1,6 +1,7 @@
 """
 Renders pipeline/data/video_<date>.mp4: the static cover-art image
-(pipeline/video/assets/cover.png) with the episode's actual narration
+(pipeline/video/assets/cover.png or cover_pm.png - per-show, resolved via
+current_show()["cover_image"]) with the episode's actual narration
 captioned on top in sync with the audio, using the timing cues
 tts/synthesize.py already records for free from Kokoro's own synthesis
 chunks (pipeline/data/captions_<date>.json) - no forced-alignment/ASR tool

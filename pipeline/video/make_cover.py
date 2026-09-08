@@ -1,8 +1,9 @@
 """
-One-time asset generator - NOT part of the daily pipeline. Run locally once to
-produce pipeline/video/assets/cover.png, then commit the resulting PNG. The
-daily video-build stage (build_video.py) reuses this same static image every
-day rather than regenerating it.
+One-time asset generator - NOT part of the daily pipeline. Run locally once per
+show (--show {tech,pm}) to produce pipeline/video/assets/cover.png (tech,
+the default) or cover_pm.png (pm), then commit the resulting PNG(s). The
+daily video-build stage (build_video.py) reuses these same static images every
+day rather than regenerating them.
 """
 
 from pathlib import Path
@@ -14,6 +15,9 @@ import argparse
 WIDTH, HEIGHT = 1920, 1080
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
+# out_name below must stay in sync with common.SHOWS[...]["cover_image"] - not imported from
+# there on purpose (this is a one-off manual asset script, not part of the daily pipeline), but
+# a future editor changing one needs to update the other too.
 COVERS = {
     "tech": {
         "bg_top": (13, 16, 36),

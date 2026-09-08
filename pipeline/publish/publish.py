@@ -6,8 +6,10 @@ Primary path (see BRD Section 14.5): Firebase Spark (free plan) —
   - MP3 uploaded to Cloud Storage, with a permanent public download URL
     generated the same way the Firebase console/SDKs do (a firebaseStorageDownloadTokens
     metadata token), so no signed-URL expiry to worry about.
-  - Episode metadata + transcript written to Firestore (collection "episodes", doc id = date).
-  - FCM push sent to the "daily_episode" topic, which the app subscribes to.
+  - Episode metadata + transcript written to Firestore (doc id = date). The collection and FCM
+    push topic are now per-show, resolved via current_show() (tech: collection "episodes",
+    topic "daily_episode" - unchanged; see common.SHOWS for the PM show's
+    "episodes_pm"/"daily_pm_episode").
 
 Fallback: if FIREBASE_SERVICE_ACCOUNT is not set (e.g. you're avoiding Google
 services per BRD Section 14.5's fallback), this script no-ops and simply
@@ -50,7 +52,7 @@ def init_firebase():
     return firebase_admin.initialize_app(cred, {"storageBucket": bucket_name})
 
 
-def upload_audio(mp3_path: Path, date: str) -> str:
+def upload_audio(mp3_path: Path) -> str:
     """Uploads the MP3 and returns a permanent public Firebase download URL."""
     from firebase_admin import storage
 
@@ -120,7 +122,7 @@ def main() -> None:
 
     init_firebase()
     log.info("Uploading %s to Firebase Storage...", mp3_path.name)
-    audio_url = upload_audio(mp3_path, date)
+    audio_url = upload_audio(mp3_path)
 
     log.info("Writing Firestore episode doc...")
     write_episode_doc(date, audio_url, transcript)
