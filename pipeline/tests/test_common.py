@@ -39,3 +39,25 @@ def test_call_groq_falls_back_to_default_model(monkeypatch):
 
     _, kwargs = MockGroq.return_value.chat.completions.create.call_args
     assert kwargs["model"] == common.DEFAULT_GROQ_MODEL
+
+
+def test_current_show_defaults_to_tech(monkeypatch):
+    monkeypatch.delenv("PIPELINE_SHOW", raising=False)
+    assert common.current_show()["show_label"] == "Daily Tech Briefing"
+
+
+def test_current_show_reads_pipeline_show_env(monkeypatch):
+    monkeypatch.setenv("PIPELINE_SHOW", "pm")
+    assert common.current_show()["show_label"] == "Project Manager's Room"
+
+
+def test_artifact_path_tech_is_unsuffixed(monkeypatch):
+    monkeypatch.delenv("PIPELINE_SHOW", raising=False)
+    path = common.artifact_path("episode", "mp3", "2026-09-08")
+    assert path == common.DATA_DIR / "episode_2026-09-08.mp3"
+
+
+def test_artifact_path_pm_has_suffix(monkeypatch):
+    monkeypatch.setenv("PIPELINE_SHOW", "pm")
+    path = common.artifact_path("episode", "mp3", "2026-09-08")
+    assert path == common.DATA_DIR / "episode_pm_2026-09-08.mp3"

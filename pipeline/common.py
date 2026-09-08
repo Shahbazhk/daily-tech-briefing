@@ -54,3 +54,46 @@ def episode_date() -> str:
 def ensure_data_dir() -> Path:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     return DATA_DIR
+
+
+SHOWS: dict[str, dict] = {
+    "tech": {
+        "sources_path": CONFIG_PATH,
+        "suffix": "",
+        "show_label": "Daily Tech Briefing",
+        "cover_image": "cover.png",
+        "script_module": "scripting.generate_script",
+        "firestore_collection": "episodes",
+        "storage_prefix": "episodes",
+        "push_topic": "daily_episode",
+        "youtube_playlist_env": "YOUTUBE_PLAYLIST_ID",
+        "youtube_category_id": "28",  # Science & Technology
+    },
+    "pm": {
+        "sources_path": PIPELINE_ROOT / "config" / "sources_pm.yaml",
+        "suffix": "_pm",
+        "show_label": "Project Manager's Room",
+        "cover_image": "cover_pm.png",
+        "script_module": "scripting.generate_script_pm",
+        "firestore_collection": "episodes_pm",
+        "storage_prefix": "episodes_pm",
+        "push_topic": "daily_pm_episode",
+        "youtube_playlist_env": "YOUTUBE_PM_PLAYLIST_ID",
+        "youtube_category_id": "27",  # Education
+    },
+}
+
+
+def current_show() -> dict:
+    """Resolves the active show from the PIPELINE_SHOW env var (set by
+    run_pipeline.py's --show flag), defaulting to "tech" so every existing
+    call site and workflow keeps working unchanged."""
+    return SHOWS[os.environ.get("PIPELINE_SHOW", "tech")]
+
+
+def artifact_path(kind: str, ext: str, date: str) -> Path:
+    """e.g. artifact_path("episode", "mp3", "2026-09-08") ->
+    data/episode_2026-09-08.mp3 for the tech show (unsuffixed - matches every
+    already-published filename) or data/episode_pm_2026-09-08.mp3 for pm."""
+    suffix = current_show()["suffix"]
+    return DATA_DIR / f"{kind}{suffix}_{date}.{ext}"
