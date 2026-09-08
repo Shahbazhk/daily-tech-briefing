@@ -1,3 +1,5 @@
+import json
+import runpy
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -64,3 +66,74 @@ def test_generate_deep_dive_segment_returns_text_when_safe():
             "Agile & Scrum Delivery", {"title": "T", "snippet": "s", "url": "http://x"}, target_words=300
         )
     assert result == "x " * 300
+
+
+def test_pm_script_stage_runs_under_runpy_without_manual_syspath(monkeypatch, tmp_path):
+    """Guards the real run_pipeline.py path: runpy.run_path does NOT add the script's own
+    directory to sys.path (unlike `python script.py`), so a bare `from generate_script import
+    ...` only works if the file inserts its own directory too. This test module's own
+    top-of-file sys.path.insert for the scripting dir (line 6 above) would normally mask that
+    bug, so we strip it from sys.path (and clear the relevant sys.modules cache) before
+    invoking runpy, to genuinely reproduce what run_pipeline.py's run_stage() sees."""
+    monkeypatch.setenv("PIPELINE_SHOW", "pm")
+    monkeypatch.setattr(common, "DATA_DIR", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    pipeline_root = Path(__file__).resolve().parents[1]
+    script_path = pipeline_root / "scripting" / "generate_script_pm.py"
+
+    # Simulate exactly what run_pipeline.py's run_stage() does: NOT pre-inserting the
+    # scripting directory (only the pipeline root is on sys.path, matching run_pipeline.py's
+    # own line 18 sys.path.insert - not this test file's separate scripting-dir insert).
+    saved_path = list(sys.path)
+    saved_modules = dict(sys.modules)
+    try:
+        sys.path = [p for p in sys.path if not p.endswith("scripting")]
+        for mod_name in list(sys.modules):
+            if mod_name in ("generate_script_pm", "generate_script"):
+                del sys.modules[mod_name]
+        try:
+            runpy.run_path(str(script_path), run_name="__main__")
+            assert False, "expected SystemExit for missing collected_pm_*.json"
+        except SystemExit as e:
+            # Reaching this (not ModuleNotFoundError) proves the import worked.
+            assert "collected" in str(e) or "Missing" in str(e)
+    finally:
+        sys.path = saved_path
+        sys.modules.clear()
+        sys.modules.update(saved_modules)
+
+
+def test_main_on_quiet_day_uses_quiet_intro_and_still_writes_story_only_episode(monkeypatch, tmp_path):
+    """No PM topics collected today (a "quiet day") - main() must skip straight to the
+    QUIET_DAY_INTRO_TEMPLATE (not INTRO_TEMPLATE, which references topics that don't exist)
+    while still generating and writing a real, if shorter, episode built solely from the story
+    segment - per this file's module docstring, the story segment always runs regardless of
+    news volume."""
+    monkeypatch.setenv("PIPELINE_SHOW", "pm")
+    monkeypatch.setattr(common, "DATA_DIR", tmp_path)
+
+    date = common.episode_date()
+    collected_path = tmp_path / f"collected_pm_{date}.json"
+    collected_path.write_text(json.dumps({"date": date, "topics": {}}), encoding="utf-8")
+
+    with patch("generate_script_pm.call_groq", return_value="x " * 300), \
+         patch("generate_script_pm.check_segment_safety", return_value=(True, "")):
+        generate_script_pm.main()
+
+    script_path = tmp_path / f"script_pm_{date}.md"
+    transcript_path = tmp_path / f"transcript_pm_{date}.json"
+    assert script_path.exists()
+    assert transcript_path.exists()
+
+    script_text = script_path.read_text(encoding="utf-8")
+    expected_quiet_intro = generate_script_pm.QUIET_DAY_INTRO_TEMPLATE.format(date=date)
+    assert expected_quiet_intro in script_text
+    # The topics-driven intro references sub-topics that don't exist on a quiet day - it must
+    # not appear.
+    assert "Coming up:" not in script_text
+    assert generate_script_pm.STORY_TRANSITION in script_text
+    assert generate_script_pm.OUTRO_TEXT in script_text
+
+    theme = generate_script_pm.story_theme_for_date(date)
+    transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
+    assert transcript["topics_covered"] == [{"topic": f"Story: {theme}", "sources": []}]
