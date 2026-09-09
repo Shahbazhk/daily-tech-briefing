@@ -85,6 +85,7 @@ def build_episode(release: dict, token: Optional[str]) -> Optional[dict]:
         "topics": [t["topic"] for t in transcript.get("topics_covered", [])],
         "audio_url": audio_url,
         "video_id": transcript.get("youtube_video_id"),
+        "script": transcript.get("script", ""),
     }
 
 
