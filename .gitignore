@@ -10,6 +10,7 @@ __pycache__/
 .venv/
 venv/
 pipeline/data/
+site/public/data/
 
 # Kokoro model weights (downloaded by CI, not committed)
 *.onnx
