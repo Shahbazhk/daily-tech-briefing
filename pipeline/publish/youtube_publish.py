@@ -135,6 +135,16 @@ def add_to_playlist(youtube, playlist_id: str, video_id: str) -> None:
     ).execute(num_retries=3)
 
 
+def record_video_id(transcript_path: Path, transcript: dict, video_id: str) -> None:
+    """Writes the uploaded video's id back into the transcript file so downstream
+    consumers (the episode website's manifest generator) can build a direct per-episode
+    YouTube embed without a second API call. transcript_path is already a GitHub Release
+    asset by the time the workflow's later "attach to release" step runs, so no workflow
+    change is needed - this just has to happen before this process exits."""
+    transcript["youtube_video_id"] = video_id
+    transcript_path.write_text(json.dumps(transcript, indent=2), encoding="utf-8")
+
+
 def main() -> None:
     ensure_data_dir()
     date = episode_date()
@@ -179,6 +189,7 @@ def main() -> None:
 
     log.info("Uploading %s to YouTube...", video_path.name)
     video_id = upload_video(youtube, video_path, result, date)
+    record_video_id(transcript_path, transcript, video_id)
     log.info("Uploaded video id %s, adding to playlist %s...", video_id, playlist_id)
     # Add to the playlist immediately after the video exists - this is what makes the
     # video discoverable by video_already_uploaded()'s marker check. Setting the

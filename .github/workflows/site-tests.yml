@@ -1,0 +1,27 @@
+name: Site Tests
+
+on:
+  push:
+    paths:
+      - "site/**"
+      - ".github/workflows/site-tests.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r site/requirements.txt
+
+      - name: Run site test suite
+        run: cd site && python -m pytest tests/ -v
