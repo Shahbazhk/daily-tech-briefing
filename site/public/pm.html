@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Manager's Room — The Daily Standup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+
+  <main>
+    <section class="page-heading">
+      <h1>Project Manager's Room</h1>
+      <p class="tagline">Delivery updates, a deep dive, and a story from the field — daily.</p>
+    </section>
+    <section id="episodes-list" class="episodes-list"></section>
+  </main>
+
+  <script src="js/shared.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/episodes.js"></script>
+  <script>
+    loadShowEpisodes("pm", "episodes-list");
+  </script>
+</body>
+</html>

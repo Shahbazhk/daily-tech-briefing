@@ -35,6 +35,7 @@ def test_build_manifest_filters_by_exact_show_regex():
     ]
     fake_transcript = {
         "date": "2026-09-08",
+        "script": "Good morning. Here's today's briefing.\n\nJava shipped a new release.",
         "topics_covered": [{"topic": "Java", "sources": []}],
         "youtube_video_id": "vid1",
     }
@@ -45,6 +46,7 @@ def test_build_manifest_filters_by_exact_show_regex():
     assert manifest["episodes"][0]["date"] == "2026-09-08"
     assert manifest["episodes"][0]["topics"] == ["Java"]
     assert manifest["episodes"][0]["video_id"] == "vid1"
+    assert manifest["episodes"][0]["script"] == fake_transcript["script"]
     assert manifest["show_label"] == "Daily Tech Briefing"
 
 
