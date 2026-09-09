@@ -9,6 +9,19 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
+ * Which show's releases to read. The tag pattern is anchored and exact-date so that,
+ * e.g., "episode-pm-2026-09-08" (PM show) can never match TECH's pattern even though it
+ * shares the "episode-" prefix - a loose startsWith("episode-") would let the PM tag
+ * string-sort ahead of TECH's dated tags ('p' > any digit) and hijack "latest episode".
+ * The date is captured directly from the match so callers never re-derive it via prefix
+ * stripping.
+ */
+enum class Show(val tagPattern: Regex, val displayName: String) {
+    TECH(Regex("^episode-(\\d{4}-\\d{2}-\\d{2})$"), "Tech Briefing"),
+    PM(Regex("^episode-pm-(\\d{4}-\\d{2}-\\d{2})$"), "Project Manager's Room")
+}
+
+/**
  * Reads episodes straight from GitHub Releases published by
  * pipeline/publish/publish.py's fallback path (used whenever FIREBASE_SERVICE_ACCOUNT
  * isn't configured - see BRD Section 14.5). No auth needed: the repo is public and this
@@ -25,7 +38,7 @@ import java.net.URL
  * TODO: once Firebase is set up (BRD open item), swap this for a Firestore-backed
  * implementation with real push notifications instead of check-on-open polling.
  */
-class EpisodeRepository {
+class EpisodeRepository(private val show: Show = Show.TECH) {
 
     private val releasesUrl =
         "https://api.github.com/repos/Shahbazhk/daily-tech-briefing/releases"
@@ -35,7 +48,7 @@ class EpisodeRepository {
         var release: JSONObject? = null
         for (i in 0 until releases.length()) {
             val candidate = releases.getJSONObject(i)
-            if (candidate.optString("tag_name").startsWith("episode-")) {
+            if (show.tagPattern.matches(candidate.optString("tag_name"))) {
                 if (release == null ||
                     candidate.getString("tag_name") > release!!.getString("tag_name")
                 ) {
@@ -47,7 +60,7 @@ class EpisodeRepository {
         val assets = extractAssets(chosen)
         if (assets.audioUrl.isEmpty()) return@withContext null
 
-        var date = chosen.optString("tag_name", "").removePrefix("episode-")
+        var date = dateFromTag(chosen.optString("tag_name", ""))
         var script = ""
         var topics = emptyList<String>()
         if (assets.transcriptUrl.isNotEmpty()) {
@@ -88,7 +101,7 @@ class EpisodeRepository {
 
         val freshTopics = mutableMapOf<String, List<String>>()
         val summaries = releases.map { release ->
-            val date = release.optString("tag_name", "").removePrefix("episode-")
+            val date = dateFromTag(release.optString("tag_name", ""))
             val assets = extractAssets(release)
             val topics = cachedTopics[date] ?: fetchTopics(assets.transcriptUrl).also { freshTopics[date] = it }
             EpisodeSummary(date = date, topicsCovered = topics, audioUrl = assets.audioUrl, transcriptUrl = assets.transcriptUrl)
@@ -96,6 +109,8 @@ class EpisodeRepository {
         if (freshTopics.isNotEmpty()) historyCache.merge(freshTopics)
         summaries.sortedByDescending { it.date }
     }
+
+    private fun dateFromTag(tag: String): String = show.tagPattern.find(tag)?.groupValues?.get(1) ?: tag
 
     private data class ReleaseAssets(val audioUrl: String, val transcriptUrl: String)
 
@@ -121,7 +136,7 @@ class EpisodeRepository {
             if (pageJson.length() == 0) break
             for (i in 0 until pageJson.length()) {
                 val candidate = pageJson.getJSONObject(i)
-                if (candidate.optString("tag_name").startsWith("episode-")) {
+                if (show.tagPattern.matches(candidate.optString("tag_name"))) {
                     all.add(candidate)
                 }
             }
