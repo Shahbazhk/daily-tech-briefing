@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write # needed only for the GitHub Release fallback step
+  actions: write # needed to dispatch deploy-site.yml (see "Trigger site rebuild" step)
 
 jobs:
   build-episode:
@@ -62,3 +63,9 @@ jobs:
             pipeline/data/transcript_*.json \
             --title "Daily Tech Briefing - $DATE" \
             --notes "Automated daily episode. Firebase publish was not configured, so the app should poll this release."
+
+      - name: Trigger site rebuild (releases made with GITHUB_TOKEN don't fire deploy-site.yml's `release` trigger - see its workflow for why)
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy-site.yml

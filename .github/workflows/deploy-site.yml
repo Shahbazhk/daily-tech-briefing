@@ -2,6 +2,11 @@ name: Deploy Episode Website
 
 on:
   release:
+    # In practice this never fires: daily-episode.yml/daily-pm-episode.yml create their
+    # releases with GITHUB_TOKEN, and GitHub suppresses the `release` event for other
+    # workflows when the actor is GITHUB_TOKEN (anti-recursion). Those workflows instead
+    # explicitly dispatch this workflow via `gh workflow run deploy-site.yml` after
+    # publishing. Kept anyway for a human publishing a release by hand.
     types: [published]
   workflow_dispatch: {}
 
