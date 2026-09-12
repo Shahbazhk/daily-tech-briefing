@@ -1,14 +1,17 @@
-name: Daily Tech Briefing
+name: Project Manager's Room
 
 
 on:
   schedule:
-    # 00:00 UTC = 03:00 AM AST (Saudi Arabia, UTC+3) — a 5-hour buffer before
-    # the 08:00 AM AST delivery target. GitHub's `schedule` trigger is best-effort
-    # and can be delayed by hours under load (seen: 3h27m delay on 2026-08-03,
-    # which blew through the previous 2-hour buffer) — this buffer is sized to
-    # absorb that plus slow LLM/TTS runs or retries.
-    - cron: "0 0 * * *"
+    # 09:00 UTC ~= 12:00 PM AST - several hours after the tech show's 00:00 UTC run,
+    # landing as a distinct midday touchpoint and avoiding scheduler/Groq-rate-limit
+    # contention between the two jobs (see design spec's Workflow section).
+    #
+    # Safe to run now: EpisodeRepository.kt matches releases against an anchored,
+    # exact-date regex per show, so a "episode-pm-YYYY-MM-DD" release can no longer be
+    # picked up by TECH's "latest episode" lookup (previously a loose
+    # startsWith("episode-") check that PM's tag would win via string comparison).
+    - cron: "0 9 * * *"
   workflow_dispatch: {} # allows manual "Run workflow" for testing
 
 permissions:
@@ -16,7 +19,7 @@ permissions:
   actions: write # needed to dispatch deploy-site.yml (see "Trigger site rebuild" step)
 
 jobs:
-  build-episode:
+  build-pm-episode:
     runs-on: ubuntu-latest
     env:
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -29,7 +32,8 @@ jobs:
       YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
       YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
       YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-      YOUTUBE_PLAYLIST_ID: ${{ secrets.YOUTUBE_PLAYLIST_ID }}
+      YOUTUBE_PM_PLAYLIST_ID: ${{ secrets.YOUTUBE_PM_PLAYLIST_ID }}
+      KOKORO_VOICE: am_michael
     steps:
       - uses: actions/checkout@v4
 
@@ -46,8 +50,8 @@ jobs:
       - name: Install Python deps
         run: pip install -r pipeline/requirements.txt
 
-      - name: Run pipeline (collect -> script -> TTS -> build_video -> publish -> youtube_publish)
-        run: python pipeline/run_pipeline.py
+      - name: Run pipeline for the PM show (collect -> script -> TTS -> build_video -> publish -> youtube_publish)
+        run: python pipeline/run_pipeline.py --show pm
 
       - name: Fallback - attach episode to a GitHub Release (only if Firebase isn't configured)
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT == '' }}
@@ -55,14 +59,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DATE=$(date -u +%F)
-          # Idempotent: a manual re-run on the same day (e.g. while testing) would otherwise
-          # fail with "a release with the same tag name already exists".
-          gh release delete "episode-$DATE" --yes 2>/dev/null || true
-          gh release create "episode-$DATE" \
-            pipeline/data/episode_*.mp3 \
-            pipeline/data/transcript_*.json \
-            --title "Daily Tech Briefing - $DATE" \
-            --notes "Automated daily episode. Firebase publish was not configured, so the app should poll this release."
+          gh release delete "episode-pm-$DATE" --yes 2>/dev/null || true
+          gh release create "episode-pm-$DATE" \
+            pipeline/data/episode_pm_*.mp3 \
+            pipeline/data/transcript_pm_*.json \
+            --title "Project Manager's Room - $DATE" \
+            --notes "Automated PM/Delivery episode. Firebase publish was not configured, so the app should poll this release."
 
       - name: Trigger site rebuild (releases made with GITHUB_TOKEN don't fire deploy-site.yml's `release` trigger - see its workflow for why)
         if: ${{ env.FIREBASE_SERVICE_ACCOUNT == '' }}

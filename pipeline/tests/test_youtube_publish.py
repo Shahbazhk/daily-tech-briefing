@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -72,3 +73,15 @@ def test_upload_video_appends_episode_date_marker_to_description(tmp_path):
     assert video_id == "abc123"
     body = fake_youtube.videos.return_value.insert.call_args.kwargs["body"]
     assert body["snippet"]["description"] == "Today we cover Java.\n\n[Episode date: 2026-08-04]"
+
+
+def test_record_video_id_writes_id_into_transcript_file(tmp_path):
+    transcript_path = tmp_path / "transcript_2026-09-08.json"
+    transcript = {"date": "2026-09-08", "script": "hello", "topics_covered": []}
+
+    youtube_publish.record_video_id(transcript_path, transcript, "abc123")
+
+    saved = json.loads(transcript_path.read_text(encoding="utf-8"))
+    assert saved["youtube_video_id"] == "abc123"
+    assert saved["date"] == "2026-09-08"
+    assert saved["script"] == "hello"

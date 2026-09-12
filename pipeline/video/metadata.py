@@ -3,7 +3,8 @@ Generates the YouTube title/description/tags for today's episode via one
 additional Groq call (same free API already used for the script), fed the
 already safety-approved script + topic list - see design spec Section 3.4:
 no separate safety check needed here since the source script has already
-passed the guardrail in scripting/generate_script.py.
+passed the guardrail in scripting/generate_script.py (tech show) or
+scripting/generate_script_pm.py (PM show).
 """
 
 import json
@@ -12,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import call_groq, ensure_data_dir, episode_date, get_logger  # noqa: E402
+from common import artifact_path, call_groq, current_show, ensure_data_dir, episode_date, get_logger  # noqa: E402
 
 log = get_logger("metadata")
 
@@ -23,7 +24,9 @@ MAX_TITLE_LEN = 100
 MAX_TAGS_CHARS = 500
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
-METADATA_SYSTEM_PROMPT = """You write YouTube metadata for a daily technology news podcast video.
+
+def build_metadata_system_prompt(show_label: str) -> str:
+    return f"""You write YouTube metadata for "{show_label}", a daily podcast video.
 Given the date, topic list, and full narration script for today's episode, produce a JSON object
 with exactly these keys:
 - "title": a short, specific, compelling title (under 100 characters), mentioning the date and the
@@ -33,6 +36,7 @@ with exactly these keys:
 
 Respond with ONLY the JSON object, no other text, no markdown code fences.
 """
+
 
 DISCLOSURE_LINE = (
     "\n\nThis episode is narrated by an AI voice (Kokoro TTS) and its news content is "
@@ -52,11 +56,11 @@ def _parse_json(raw: str) -> dict:
     return json.loads(_strip_fences(raw))
 
 
-def _normalize(data: dict, date: str) -> dict:
+def _normalize(data: dict, date: str, show_label: str) -> dict:
     # Never trust the LLM's output shape/length against YouTube's own limits - a
     # missing key, an oversized title, or a non-list tags field costs the day's
     # upload with a bare HTTP 400 and no automatic retry.
-    title = str(data.get("title") or f"Daily Tech Briefing — {date}")
+    title = str(data.get("title") or f"{show_label} — {date}")
     title = title.replace("<", "").replace(">", "")[:MAX_TITLE_LEN]
 
     description = str(data.get("description") or "")
@@ -77,9 +81,9 @@ def _normalize(data: dict, date: str) -> dict:
     return {"title": title, "description": description, "tags": tags}
 
 
-def generate_metadata(date: str, topics: list[str], script: str) -> dict:
+def generate_metadata(date: str, topics: list[str], script: str, show_label: str = "Daily Tech Briefing") -> dict:
     messages = [
-        {"role": "system", "content": METADATA_SYSTEM_PROMPT},
+        {"role": "system", "content": build_metadata_system_prompt(show_label)},
         {"role": "user", "content": build_metadata_prompt(date, topics, script)},
     ]
     # openai/gpt-oss-120b is a reasoning model: it spends tokens on hidden chain-of-thought
@@ -98,24 +102,24 @@ def generate_metadata(date: str, topics: list[str], script: str) -> dict:
         raw = call_groq(messages, max_tokens=1200)
         data = _parse_json(raw)
 
-    result = _normalize(data, date)
+    result = _normalize(data, date, show_label)
     result["description"] = result["description"].rstrip() + DISCLOSURE_LINE
     return result
 
 
 def main() -> None:
-    data_dir = ensure_data_dir()
+    ensure_data_dir()
     date = episode_date()
-    transcript_path = data_dir / f"transcript_{date}.json"
+    transcript_path = artifact_path("transcript", "json", date)
     if not transcript_path.exists():
         raise SystemExit(f"Missing {transcript_path} — run scripting/generate_script.py first.")
 
     transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
     topics = [t["topic"] for t in transcript["topics_covered"]]
 
-    result = generate_metadata(date, topics, transcript["script"])
+    result = generate_metadata(date, topics, transcript["script"], show_label=current_show()["show_label"])
 
-    out_path = data_dir / f"youtube_metadata_{date}.json"
+    out_path = artifact_path("youtube_metadata", "json", date)
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
     log.info("Wrote %s: %s", out_path, result["title"])
 

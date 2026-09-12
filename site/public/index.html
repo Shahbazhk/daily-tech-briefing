@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Daily Standup</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="site-header"></div>
+
+  <main>
+    <section class="hero">
+      <h1>The Daily Standup</h1>
+      <p class="tagline">Tech news and delivery wisdom, every day — narrated, streamed, and archived.</p>
+    </section>
+
+    <section class="feature-grid">
+      <a href="tech.html" class="feature-card">
+        <h2>Tech Briefing</h2>
+        <p>Java, Spring Boot, Kubernetes, Cloud, and more — a daily engineering news roundup.</p>
+      </a>
+      <a href="pm.html" class="feature-card">
+        <h2>Project Manager's Room</h2>
+        <p>Delivery updates, a deep dive, and a story from the field — for IT project and delivery managers.</p>
+      </a>
+      <a href="articles.html" class="feature-card">
+        <h2>Articles</h2>
+        <p>Every episode, written out in full — read instead of listen.</p>
+      </a>
+      <a href="videos.html" class="feature-card">
+        <h2>Videos</h2>
+        <p>Watch every episode's video, all in one gallery.</p>
+      </a>
+    </section>
+
+    <section class="latest-section">
+      <h2>Latest episodes</h2>
+      <div id="latest-episodes" class="teaser-grid">
+        <p class="status">Loading…</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/shared.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>

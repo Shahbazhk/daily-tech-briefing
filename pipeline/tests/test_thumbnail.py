@@ -29,3 +29,9 @@ def test_generate_thumbnail_handles_empty_topics(tmp_path):
     out_path = tmp_path / "thumb.png"
     thumbnail.generate_thumbnail("2026-08-03", [], out_path)
     assert out_path.exists()
+
+
+def test_generate_thumbnail_uses_show_label_for_empty_topics_fallback(tmp_path):
+    out_path = tmp_path / "thumb.png"
+    thumbnail.generate_thumbnail("2026-09-08", [], out_path, show_label="Project Manager's Room")
+    assert out_path.exists()

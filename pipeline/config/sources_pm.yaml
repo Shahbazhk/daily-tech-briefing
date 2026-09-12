@@ -1,0 +1,53 @@
+# Topic -> source config for "Project Manager's Room" (the PM/Delivery show).
+# Same shape as ../sources.yaml. RSS entries below were verified by fetching each URL
+# directly and confirming it returns real, current <item> entries (not just valid-looking
+# XML) - see docs/superpowers/specs/2026-09-08-pm-delivery-show-design.md for the ones that
+# didn't make it: agilealliance.org has no RSS feed at all (newsletter only), scrum.org's
+# blog RSS URL returns nothing, and pmi.org blocks automated fetches with a 403. Those three
+# were dropped rather than left in as broken URLs (2026-09-08 re-check). The collector skips
+# a broken feed silently (with a log line) rather than failing the whole run either way.
+#
+# No PMI login/credentials are used here or anywhere in this pipeline (see design spec
+# for why) - RSS feeds only, same as every other source in this file.
+
+topics:
+  agile_delivery:
+    label: "Agile & Scrum Delivery"
+    rss:
+      - https://rebelsguidetopm.com/feed/
+    reddit_subs: ["agile", "scrum"]
+    hn_query: "agile delivery"
+
+  risk_stakeholder:
+    label: "Risk & Stakeholder Management"
+    rss: []
+    reddit_subs: ["projectmanagement"]
+    hn_query: "project risk management"
+
+  pmi_pmbok:
+    label: "PMI & PMBOK News"
+    description: >
+      News from the Project Management Institute and PMBOK-related certification/standards
+      updates.
+    rss: []
+    reddit_subs: ["pmp"]
+    hn_query: "PMI project management"
+
+  hybrid_remote_delivery:
+    label: "Hybrid & Remote Team Delivery"
+    rss: []
+    reddit_subs: ["projectmanagement", "agile"]
+    hn_query: "remote team delivery"
+
+  pm_tooling:
+    label: "PM Tooling (Jira, MS Project, Azure DevOps)"
+    rss:
+      - https://www.projectmanager.com/blog/feed
+    reddit_subs: ["projectmanagement"]
+    hn_query: "project management tools"
+
+# Collection window, in hours, applied uniformly to all sources above.
+lookback_hours: 24
+
+# Cap on raw items collected per topic before ranking/summarization.
+max_items_per_topic: 8
