@@ -4,6 +4,7 @@ const NAV_LINKS = [
   { href: "pm.html", label: "PM Room" },
   { href: "articles.html", label: "Articles" },
   { href: "videos.html", label: "Videos" },
+  { href: "about.html", label: "About" },
 ];
 
 function currentPageName() {
